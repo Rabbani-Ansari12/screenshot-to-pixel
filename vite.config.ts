@@ -28,7 +28,10 @@ export default defineConfig(({ command }) => ({
     tanstackStart({
       // src/server.ts wraps the default SSR entry with an error page.
       server: { entry: "server" },
-      importProtection: { behavior: "error", client: { files: ["**/server/**"], specifiers: ["server-only"] } },
+      importProtection: {
+        behavior: "error",
+        client: { files: ["**/server/**"], specifiers: ["server-only"] },
+      },
     }),
     ...(command === "build" ? [nitro()] : []),
     viteReact(),

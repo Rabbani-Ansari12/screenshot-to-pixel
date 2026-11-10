@@ -16,6 +16,7 @@ matched to truck trips and recorded automatically. People only handle exceptions
 ```sh
 bun install                  # or: npm install
 cp .env.example .env.local   # fill VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+npx supabase link --project-ref <your-project-ref>   # needs SUPABASE_ACCESS_TOKEN in your shell
 npm run dev                  # http://localhost:5173
 ```
 
@@ -33,6 +34,9 @@ email and a 4+ character password, and pick the Owner or Employee demo role.
 | `npm run db:types` | Regenerate `src/types/database.ts` from the linked Supabase project |
 | `npm run db:push` | Apply new migrations to the linked Supabase project |
 | `npm run create-owner` | Create the first owner account (reads `supabase/secrets.env`) |
+| `npm run db:test` | pgTAP tests (RLS + business rules) against the linked project, rolled back |
+| `npm run db:seed:generate` | Regenerate `supabase/seed.sql` (dev data) from `src/data` |
+| `npm run db:api -- status\|migrate\|test\|seed` | Same DB operations over HTTPS when the Postgres port is blocked |
 
 ## Project layout
 

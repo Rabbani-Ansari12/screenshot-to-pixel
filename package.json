@@ -16,7 +16,9 @@
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked --schema public > src/types/database.ts",
     "db:test": "supabase test db --linked",
-    "create-owner": "tsx scripts/create-owner.ts"
+    "create-owner": "tsx scripts/create-owner.ts",
+    "db:seed:generate": "tsx scripts/generate-seed.ts",
+    "db:api": "tsx scripts/supabase-api.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"

@@ -1,0 +1,45 @@
+/**
+ * The only way Edge Functions read secrets.
+ * Throws a clear error naming the secret when it is missing or still a placeholder.
+ * Never log secret values.
+ */
+
+export const SECRET_NAMES = [
+  "GEMINI_API_KEY",
+  "GEMINI_MODEL",
+  "TWILIO_ACCOUNT_SID",
+  "TWILIO_AUTH_TOKEN",
+  "TWILIO_WHATSAPP_NUMBER",
+  "OWNER_WHATSAPP_NUMBER",
+  "APP_ORIGIN",
+  "WEBHOOK_BASE_URL",
+  "OWNER_EMAIL",
+  "OWNER_PASSWORD",
+] as const;
+
+export type SecretName = (typeof SECRET_NAMES)[number] | "SUPABASE_URL" | "SUPABASE_ANON_KEY" | "SUPABASE_SERVICE_ROLE_KEY";
+
+export class MissingSecretError extends Error {
+  constructor(public readonly secret: string, reason: "missing" | "placeholder") {
+    super(
+      reason === "missing"
+        ? `Secret ${secret} is not set. Run: npx supabase secrets set ${secret}=<value> (see docs/secrets.md)`
+        : `Secret ${secret} still has its placeholder value. Run: npx supabase secrets set ${secret}=<value> (see docs/secrets.md)`,
+    );
+    this.name = "MissingSecretError";
+  }
+}
+
+/** Returns why a secret is unusable, or null when it is configured. Never returns the value. */
+export function secretProblem(name: SecretName): "missing" | "placeholder" | null {
+  const value = Deno.env.get(name);
+  if (value === undefined || value.trim() === "") return "missing";
+  if (value.startsWith("REPLACE_ME")) return "placeholder";
+  return null;
+}
+
+export function getSecret(name: SecretName): string {
+  const problem = secretProblem(name);
+  if (problem) throw new MissingSecretError(name, problem);
+  return Deno.env.get(name) as string;
+}
