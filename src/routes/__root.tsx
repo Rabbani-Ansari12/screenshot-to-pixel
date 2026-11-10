@@ -2,16 +2,25 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
+  Navigate,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { Layers3 } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { AppShell } from "@/components/app-shell";
+import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider, useAuth } from "@/lib/auth";
+import { PUBLIC_PATHS } from "@/lib/navigation";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 
 function NotFoundComponent() {
   return (
@@ -81,11 +90,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Meridian Supply · Materials, Transport & Accounts" },
+      {
+        name: "description",
+        content:
+          "Automation-first material supply, truck trip, delivery and accounts management for construction-material suppliers.",
+      },
+      { name: "author", content: "Meridian Supply" },
+      { property: "og:title", content: "Meridian Supply" },
+      {
+        property: "og:description",
+        content:
+          "Material supply, transport, delivery and accounts — automated from WhatsApp documents.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
@@ -96,7 +113,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Manrope:wght@600;700;800&display=swap",
+      },
     ],
+    scripts: [{ children: THEME_BOOT_SCRIPT }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -106,7 +130,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en-IN" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -118,13 +142,44 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function Splash() {
+  return (
+    <div
+      className="grid min-h-screen place-items-center bg-background"
+      aria-busy="true"
+      aria-label="Loading"
+    >
+      <span className="grid size-12 animate-pulse place-items-center rounded-2xl bg-primary text-primary-foreground">
+        <Layers3 className="size-6" />
+      </span>
+    </div>
+  );
+}
+
+/** Public pages render bare; everything else needs a session and gets the app shell. */
+function AppFrame({ children }: { children: ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { user, ready } = useAuth();
+  if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>;
+  if (!ready) return <Splash />;
+  if (!user) return <Navigate to="/login" />;
+  return <AppShell>{children}</AppShell>;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <TooltipProvider delayDuration={250}>
+          <AppFrame>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </AppFrame>
+          <Toaster position="top-right" richColors closeButton />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -1,10 +1,93 @@
-import { ChevronRight, Download, Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import type { ReactNode } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { ChevronRight, Home } from "lucide-react";
+import { NAV_GROUPS, navItemFor } from "@/lib/navigation";
+import { cn } from "@/lib/utils";
 
-export function PageHeader({ title, description, action, actionLabel, secondary }: { title: string; description: string; action?: () => void; actionLabel?: string; secondary?: boolean }) {
-  return <div className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between">
-    <div className="min-w-0"><div className="mb-2 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.11em] text-muted-foreground"><span>Meridian Supply</span><ChevronRight className="size-3" /><span className="text-foreground/70">{title}</span></div><h1 className="font-display text-[22px] font-extrabold tracking-tight sm:text-[26px]">{title}</h1><p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-muted-foreground sm:text-xs">{description}</p></div>
-    <div className="flex shrink-0 items-center gap-2"><Button variant="outline" size="sm" className="h-[34px] gap-1.5 px-3 text-[10px]" onClick={() => toast.success("Your report is ready to download")}><Download className="size-3.5" /> Export</Button>{actionLabel && <Button size="sm" className="h-[34px] gap-1.5 px-3.5 text-[10px]" onClick={action}><Plus className="size-3.5" />{actionLabel}</Button>}</div>
-  </div>;
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
+/** Breadcrumbs derived from the navigation config, plus any extra crumbs for detail pages. */
+export function Breadcrumbs({ extra = [] }: { extra?: Crumb[] }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const item = navItemFor(pathname);
+  const group = NAV_GROUPS.find((g) => item && g.items.includes(item));
+  const crumbs: Crumb[] = [];
+  if (group && group.label !== "Overview" && group.label !== item?.label)
+    crumbs.push({ label: group.label });
+  if (item && item.path !== "/") crumbs.push({ label: item.label, href: item.path });
+  crumbs.push(...extra);
+  return (
+    <nav aria-label="Breadcrumb" className="mb-2">
+      <ol className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+        <li>
+          <Link
+            to="/"
+            className="inline-flex items-center rounded hover:text-foreground"
+            aria-label="Dashboard"
+          >
+            <Home className="size-3.5" />
+          </Link>
+        </li>
+        {crumbs.map((c, i) => (
+          <li key={`${c.label}-${i}`} className="flex items-center gap-1">
+            <ChevronRight className="size-3 opacity-60" aria-hidden />
+            {c.href && i < crumbs.length - 1 ? (
+              <Link to={c.href} className="rounded hover:text-foreground">
+                {c.label}
+              </Link>
+            ) : (
+              <span
+                className={cn(i === crumbs.length - 1 && "text-foreground/80")}
+                aria-current={i === crumbs.length - 1 ? "page" : undefined}
+              >
+                {c.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+export function PageHeader({
+  title,
+  description,
+  actions,
+  crumbs,
+  badge,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  crumbs?: Crumb[];
+  badge?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <Breadcrumbs extra={crumbs ?? []} />
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="font-display text-2xl font-extrabold tracking-tight sm:text-[28px]">
+            {title}
+          </h1>
+          {badge}
+        </div>
+        {description && (
+          <p className="mt-1.5 max-w-3xl text-sm text-muted-foreground">{description}</p>
+        )}
+      </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
 }
