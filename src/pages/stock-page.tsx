@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Boxes, Warehouse } from "lucide-react";
+import { Boxes, Plus, Warehouse } from "lucide-react";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { QuickAddDialog } from "@/components/quick-add-dialog";
+import { Can } from "@/components/can";
 import type { StockMovementView } from "@/types";
 import {
   Select,
@@ -13,13 +17,17 @@ import { ErrorState, InfoNote, PageSkeleton } from "@/components/common";
 import { DataTable, optionsFrom, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { useStock } from "@/hooks/queries";
+import { api, useAction, useStock } from "@/hooks/queries";
 import { formatDate, formatNumber, formatQty } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export function StockPage() {
   const [yard, setYard] = useState("all");
+  const [addingYard, setAddingYard] = useState(false);
   const { data, isLoading, error } = useStock(yard);
+  const addYard = useAction(api.masters.addYard, (y) => `${y.name} added`, {
+    invalidate: [["stock"], ["options"]],
+  });
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <PageSkeleton kpis={4} />;
 
@@ -62,7 +70,7 @@ export function StockPage() {
             onClick={(e) => e.stopPropagation()}
             className="text-primary hover:underline"
           >
-            {m.referenceId}
+            {m.referenceLabel || m.referenceId}
           </Link>
         ) : m.referenceType === "Trip" ? (
           <Link
@@ -74,7 +82,7 @@ export function StockPage() {
             {m.referenceId}
           </Link>
         ) : (
-          <span>{m.referenceId}</span>
+          <span>{m.referenceLabel || m.referenceId}</span>
         ),
     },
     {
@@ -120,20 +128,27 @@ export function StockPage() {
         title="Stock Ledger"
         description="Material held in our own yards. Received from stock purchases, issued on yard trips."
         actions={
-          <Select value={yard} onValueChange={setYard}>
-            <SelectTrigger className="w-[220px]" aria-label="Yard">
-              <Warehouse className="size-4" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All yards</SelectItem>
-              {data.yards.map((y) => (
-                <SelectItem key={y.id} value={y.id}>
-                  {y.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Can permission="owner">
+              <Button variant="outline" onClick={() => setAddingYard(true)}>
+                <Plus className="size-4" /> Add yard
+              </Button>
+            </Can>
+            <Select value={yard} onValueChange={setYard}>
+              <SelectTrigger className="w-[220px]" aria-label="Yard">
+                <Warehouse className="size-4" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All yards</SelectItem>
+                {data.yards.map((y) => (
+                  <SelectItem key={y.id} value={y.id}>
+                    {y.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         }
       />
       <InfoNote className="mb-4">
@@ -180,7 +195,9 @@ export function StockPage() {
         data={data.movements}
         columns={columns}
         getRowId={(m) => m.id}
-        searchText={(m) => `${m.materialName} ${m.referenceId} ${m.yardName} ${m.note}`}
+        searchText={(m) =>
+          `${m.materialName} ${m.referenceLabel ?? m.referenceId} ${m.yardName} ${m.note}`
+        }
         searchPlaceholder="Search material, reference…"
         filters={[
           {
@@ -199,6 +216,20 @@ export function StockPage() {
         dateValue={(m) => m.date}
         defaultSort={{ id: "date", desc: true }}
         exportName="stock-ledger"
+      />
+      <QuickAddDialog
+        open={addingYard}
+        onOpenChange={setAddingYard}
+        title="Add stock yard"
+        description="A place where you keep material. Stock-yard purchases are received here."
+        schema={z.object({ name: z.string().min(2, "Required"), location: z.string() })}
+        defaults={{ name: "", location: "" }}
+        fields={[
+          { name: "name", label: "Yard name", full: true },
+          { name: "location", label: "Address / location", full: true },
+        ]}
+        onSubmit={(v) => addYard.mutateAsync(v)}
+        submitLabel="Add yard"
       />
     </>
   );

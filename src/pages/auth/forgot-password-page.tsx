@@ -14,20 +14,27 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/lib/auth";
 import { AuthLayout } from "./auth-layout";
 
 const schema = z.object({ email: z.string().email("Enter a valid email") });
 
 export function ForgotPasswordPage() {
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { requestPasswordReset } = useAuth();
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     defaultValues: { email: "" },
   });
-  // TODO(backend): supabase.auth.resetPasswordForEmail(email)
   const onSubmit = async ({ email }: z.infer<typeof schema>) => {
-    await new Promise((r) => setTimeout(r, 700));
-    setSentTo(email);
+    setError(null);
+    try {
+      await requestPasswordReset(email);
+      setSentTo(email);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not send the link. Try again later.");
+    }
   };
   return (
     <AuthLayout>
@@ -45,7 +52,7 @@ export function ForgotPasswordPage() {
           <h1 className="mt-4 font-display text-2xl font-extrabold">Check your email</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             If <span className="font-medium text-foreground">{sentTo}</span> belongs to an active
-            account, a reset link is on its way. The link expires in 30 minutes.
+            account, a reset link is on its way. Open it on this device to set a new password.
           </p>
           <Button asChild variant="outline" className="mt-6 w-full">
             <Link to="/login">Return to sign in</Link>
@@ -59,6 +66,11 @@ export function ForgotPasswordPage() {
           </p>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
               <FormField
                 control={form.control}
                 name="email"

@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, CheckCircle2, Scale } from "lucide-react";
+import { AlertTriangle, CheckCircle2, PencilLine, Scale } from "lucide-react";
 import type { DocumentType, TimelineEvent, TripView, WeighRecord } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,8 @@ import { SimpleTable } from "@/components/simple-table";
 import { StatusBadge } from "@/components/status-badge";
 import { Timeline } from "@/components/timeline";
 import { useTrip } from "@/hooks/queries";
+import { useAuth } from "@/lib/auth";
+import { WeightDialog } from "./weight-dialog";
 import { formatDateTime, formatINR, formatNumber, formatQty, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AuditList } from "../orders/order-detail-page";
@@ -60,21 +63,31 @@ function WeighCard({
   rec,
   unit,
   docs,
+  onEdit,
 }: {
   title: string;
   rec: WeighRecord | null;
   unit: string;
   docs: { id: string; type: DocumentType }[];
+  /** Shown when the user may add / correct this weight. */
+  onEdit?: (() => void) | undefined;
 }) {
   return (
     <SectionCard
       title={title}
       actions={
-        rec?.autoFilled ? (
-          <AutoFilledBadge />
-        ) : rec ? (
-          <StatusBadge status="Manual entry" tone="neutral" />
-        ) : null
+        <div className="flex items-center gap-2">
+          {rec?.autoFilled ? (
+            <AutoFilledBadge />
+          ) : rec ? (
+            <StatusBadge status="Manual entry" tone="neutral" />
+          ) : null}
+          {onEdit && (
+            <Button variant="outline" size="sm" onClick={onEdit}>
+              <PencilLine className="size-4" /> {rec ? "Correct" : "Record"}
+            </Button>
+          )}
+        </div>
       }
     >
       {rec ? (
@@ -149,6 +162,13 @@ export function TripDetailPage({ tripId }: { tripId: string }) {
   const { data, isLoading, error } = useTrip(tripId);
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <DetailSkeleton />;
+  return <TripDetail data={data} />;
+}
+
+function TripDetail({ data }: { data: NonNullable<ReturnType<typeof useTrip>["data"]> }) {
+  const { can } = useAuth();
+  const [editing, setEditing] = useState<"loading" | "delivery" | null>(null);
+  const canEdit = can("manage_trips") || can("correct_extracted");
   const { trip: t, documents, bills, invoices, audit } = data;
   const docs = documents.map((d) => ({ id: d.id, type: d.type }));
   const pct =
@@ -189,8 +209,20 @@ export function TripDetailPage({ tripId }: { tripId: string }) {
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <WeighCard title="Loading record" rec={t.loading} unit={t.unit} docs={docs} />
-        <WeighCard title="Delivery record" rec={t.delivery} unit={t.unit} docs={docs} />
+        <WeighCard
+          title="Loading record"
+          rec={t.loading}
+          unit={t.unit}
+          docs={docs}
+          onEdit={canEdit && t.status !== "Cancelled" ? () => setEditing("loading") : undefined}
+        />
+        <WeighCard
+          title="Delivery record"
+          rec={t.delivery}
+          unit={t.unit}
+          docs={docs}
+          onEdit={canEdit && t.status !== "Cancelled" ? () => setEditing("delivery") : undefined}
+        />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.2fr]">
@@ -409,6 +441,15 @@ export function TripDetailPage({ tripId }: { tripId: string }) {
       <SectionCard title="Audit trail" className="mt-4">
         <AuditList events={audit} />
       </SectionCard>
+      {editing && (
+        <WeightDialog
+          trip={t}
+          kind={editing}
+          current={editing === "loading" ? t.loading : t.delivery}
+          open
+          onOpenChange={(o) => !o && setEditing(null)}
+        />
+      )}
     </>
   );
 }

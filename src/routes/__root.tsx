@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  Navigate,
   createRootRouteWithContext,
   useRouter,
   useRouterState,
@@ -11,14 +10,14 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { Layers3 } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportClientError } from "../lib/error-reporting";
 import { AppShell } from "@/components/app-shell";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider, useAuth } from "@/lib/auth";
+import { ProtectedRoute } from "@/components/protected-route";
+import { AuthProvider } from "@/lib/auth";
 import { PUBLIC_PATHS } from "@/lib/navigation";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 
@@ -141,28 +140,15 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Splash() {
-  return (
-    <div
-      className="grid min-h-screen place-items-center bg-background"
-      aria-busy="true"
-      aria-label="Loading"
-    >
-      <span className="grid size-12 animate-pulse place-items-center rounded-2xl bg-primary text-primary-foreground">
-        <Layers3 className="size-6" />
-      </span>
-    </div>
-  );
-}
-
-/** Public pages render bare; everything else needs a session and gets the app shell. */
+/** Public pages render bare; everything else needs an active session and gets the app shell. */
 function AppFrame({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { user, ready } = useAuth();
   if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>;
-  if (!ready) return <Splash />;
-  if (!user) return <Navigate to="/login" />;
-  return <AppShell>{children}</AppShell>;
+  return (
+    <ProtectedRoute>
+      <AppShell>{children}</AppShell>
+    </ProtectedRoute>
+  );
 }
 
 function RootComponent() {

@@ -166,4 +166,26 @@ export function navItemFor(pathname: string): NavItem | undefined {
   );
 }
 
-export const PUBLIC_PATHS = ["/login", "/forgot-password"];
+export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+
+/**
+ * Pages whose data still comes from the built-in sample data (src/data) until their module is
+ * connected to Supabase. The app shell shows a notice on these pages.
+ */
+export const SAMPLE_DATA_PREFIXES = [
+  "/documents",
+  "/review",
+  "/whatsapp",
+  "/reconciliation",
+  "/bills",
+  "/invoices",
+  "/payments",
+  "/expenses",
+  "/profit",
+  "/reports",
+];
+
+export function usesSampleData(pathname: string): boolean {
+  if (pathname === "/") return true;
+  return SAMPLE_DATA_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}

@@ -26,7 +26,7 @@ import { InfoNote, SectionCard } from "@/components/common";
 import { EntityPicker } from "@/components/entity-picker";
 import { PageHeader } from "@/components/page-header";
 import { api, useAction, useMasterOptions } from "@/hooks/queries";
-import { DEMO_TODAY, formatNumber } from "@/lib/format";
+import { formatNumber, nowISTLocal } from "@/lib/format";
 
 const n = (msg: string) => z.number({ invalid_type_error: msg }).nonnegative();
 const schema = z
@@ -98,12 +98,12 @@ export function TripFormPage({ orderId }: { orderId?: string }) {
       loadingGross: Number.NaN,
       loadingTare: Number.NaN,
       loadingSlip: "",
-      loadingAt: `${DEMO_TODAY}T09:00`,
+      loadingAt: nowISTLocal(),
       delivered: false,
       deliveryGross: Number.NaN,
       deliveryTare: Number.NaN,
       deliverySlip: "",
-      deliveryAt: `${DEMO_TODAY}T13:00`,
+      deliveryAt: nowISTLocal(),
       freight: Number.NaN,
     },
   });

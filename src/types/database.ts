@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      provider_materials: {
+        Row: {
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          material_id: string
+          provider_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id: string
+          provider_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id?: string
+          provider_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       ai_processing_records: {
         Row: {
           attempts: number
@@ -167,6 +200,7 @@ export type Database = {
           new_data: Json | null
           old_data: Json | null
           record_id: string | null
+          reason: string | null
           table_name: string
         }
         Insert: {
@@ -178,6 +212,7 @@ export type Database = {
           new_data?: Json | null
           old_data?: Json | null
           record_id?: string | null
+          reason?: string | null
           table_name: string
         }
         Update: {
@@ -189,6 +224,7 @@ export type Database = {
           new_data?: Json | null
           old_data?: Json | null
           record_id?: string | null
+          reason?: string | null
           table_name?: string
         }
         Relationships: [
@@ -1957,6 +1993,7 @@ export type Database = {
         Row: {
           additional_costs: number
           business_id: string
+          cost_breakdown: Json
           created_at: string
           created_by: string | null
           id: string
@@ -1972,6 +2009,7 @@ export type Database = {
         Insert: {
           additional_costs?: number
           business_id?: string
+          cost_breakdown?: Json
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1987,6 +2025,7 @@ export type Database = {
         Update: {
           additional_costs?: number
           business_id?: string
+          cost_breakdown?: Json
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3127,6 +3166,185 @@ export type Database = {
       }
     }
     Views: {
+      v_customer_stats: {
+        Row: {
+          active_orders: number | null
+          business_id: string | null
+          customer_id: string | null
+          site_count: number | null
+        }
+        Relationships: []
+      }
+      v_material_stats: {
+        Row: {
+          business_id: string | null
+          delivered_qty: number | null
+          material_id: string | null
+          order_count: number | null
+          yard_stock: number | null
+        }
+        Relationships: []
+      }
+      v_order_list: {
+        Row: {
+          business_id: string | null
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_reference: string | null
+          delivered_qty: number | null
+          dispatched_qty: number | null
+          estimated_profit: number | null
+          expected_delivery: string | null
+          id: string | null
+          material_ids: string[] | null
+          materials_label: string | null
+          notes: string | null
+          order_code: string | null
+          order_date: string | null
+          order_value: number | null
+          required_qty: number | null
+          site_id: string | null
+          site_name: string | null
+          status: Database["public"]["Enums"]["order_status"] | null
+          trip_count: number | null
+          unit_label: string | null
+        }
+        Relationships: []
+      }
+      v_provider_stats: {
+        Row: {
+          business_id: string | null
+          material_ids: string[] | null
+          provider_id: string | null
+          purchase_count: number | null
+          purchase_value: number | null
+        }
+        Relationships: []
+      }
+      v_purchase_list: {
+        Row: {
+          additional_costs: number | null
+          base_amount: number | null
+          business_id: string | null
+          cost_breakdown: Json | null
+          created_at: string | null
+          customer_name: string | null
+          delivery_mode: Database["public"]["Enums"]["delivery_mode"] | null
+          document_ids: string[] | null
+          id: string | null
+          material_id: string | null
+          material_name: string | null
+          notes: string | null
+          order_code: string | null
+          order_id: string | null
+          provider_id: string | null
+          provider_name: string | null
+          purchase_code: string | null
+          purchase_date: string | null
+          purchase_item_id: string | null
+          quantity: number | null
+          rate: number | null
+          source: Database["public"]["Enums"]["record_source"] | null
+          status: Database["public"]["Enums"]["purchase_status"] | null
+          stock_location_id: string | null
+          stock_location_name: string | null
+          total_amount: number | null
+          trip_count: number | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: []
+      }
+      v_stock_ledger: {
+        Row: {
+          balance_after: number | null
+          business_id: string | null
+          created_at: string | null
+          id: string | null
+          material_id: string | null
+          material_name: string | null
+          movement_date: string | null
+          movement_type: Database["public"]["Enums"]["stock_movement_type"] | null
+          notes: string | null
+          quantity: number | null
+          reference_code: string | null
+          reference_id: string | null
+          reference_type: string | null
+          stock_location_id: string | null
+          stock_location_name: string | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: []
+      }
+      v_trip_list: {
+        Row: {
+          business_id: string | null
+          created_at: string | null
+          customer_id: string | null
+          customer_name: string | null
+          delivered_at: string | null
+          delivered_net: number | null
+          delivery_document_id: string | null
+          delivery_gross: number | null
+          delivery_location: string | null
+          delivery_method: Database["public"]["Enums"]["measurement_method"] | null
+          delivery_net_mismatch: boolean | null
+          delivery_printed_net: number | null
+          delivery_slip_number: string | null
+          delivery_source: Database["public"]["Enums"]["record_source"] | null
+          delivery_tare: number | null
+          delivery_weight_id: string | null
+          document_count: number | null
+          driver_id: string | null
+          driver_name: string | null
+          freight_amount: number | null
+          id: string | null
+          investigated_at: string | null
+          investigated_by_name: string | null
+          investigation_notes: string | null
+          investigation_outcome: Database["public"]["Enums"]["investigation_outcome"] | null
+          loaded_at: string | null
+          loading_document_id: string | null
+          loading_gross: number | null
+          loading_location: string | null
+          loading_method: Database["public"]["Enums"]["measurement_method"] | null
+          loading_net: number | null
+          loading_net_mismatch: boolean | null
+          loading_printed_net: number | null
+          loading_slip_number: string | null
+          loading_source: Database["public"]["Enums"]["record_source"] | null
+          loading_tare: number | null
+          loading_weight_id: string | null
+          material_id: string | null
+          material_name: string | null
+          order_code: string | null
+          order_id: string | null
+          order_item_id: string | null
+          provider_id: string | null
+          provider_name: string | null
+          purchase_code: string | null
+          purchase_id: string | null
+          quantity_difference: number | null
+          site_id: string | null
+          site_name: string | null
+          sort_at: string | null
+          source: Database["public"]["Enums"]["record_source"] | null
+          status: Database["public"]["Enums"]["trip_status"] | null
+          stock_location_id: string | null
+          stock_location_name: string | null
+          tolerance: number | null
+          tolerance_status: Database["public"]["Enums"]["tolerance_status"] | null
+          transporter_id: string | null
+          transporter_name: string | null
+          trip_code: string | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+          vehicle_id: string | null
+          vehicle_number: string | null
+        }
+        Relationships: []
+      }
       v_customer_outstanding: {
         Row: {
           business_id: string | null
@@ -3568,6 +3786,48 @@ export type Database = {
       }
     }
     Functions: {
+      app_fail: { Args: { p_message: string }; Returns: undefined }
+      create_customer: { Args: { p_customer: Json; p_site?: Json }; Returns: string }
+      create_material: { Args: { p_material: Json }; Returns: string }
+      create_order: { Args: { p_items: Json; p_order: Json }; Returns: Json }
+      create_provider: {
+        Args: { p_material_ids?: string[]; p_provider: Json }
+        Returns: string
+      }
+      create_purchase: { Args: { p_items: Json; p_purchase: Json }; Returns: Json }
+      create_trip: {
+        Args: { p_delivery?: Json; p_loading: Json; p_trip: Json }
+        Returns: Json
+      }
+      create_vehicle: { Args: { p_driver?: Json; p_vehicle: Json }; Returns: string }
+      record_trip_investigation: {
+        Args: {
+          p_notes: string
+          p_outcome: Database["public"]["Enums"]["investigation_outcome"]
+          p_status?: Database["public"]["Enums"]["trip_status"]
+          p_trip_id: string
+        }
+        Returns: undefined
+      }
+      save_weight_record: {
+        Args: {
+          p_reason?: string
+          p_record_type: Database["public"]["Enums"]["weight_record_type"]
+          p_trip_id: string
+          p_values: Json
+        }
+        Returns: undefined
+      }
+      set_material_tolerances: { Args: { p_values: Json }; Returns: number }
+      update_order: {
+        Args: {
+          p_items: Json
+          p_order: Json
+          p_order_id: string
+          p_reason?: string
+        }
+        Returns: Json
+      }
       current_business_id: { Args: never; Returns: string }
       generate_code: {
         Args: { p_prefix: string; p_seq: unknown; p_width: number }
@@ -3634,8 +3894,12 @@ export type Database = {
         | "recovered_from_transporter"
         | "accepted_as_normal_loss"
       invoice_status: "draft" | "issued" | "cancelled"
-      material_unit: "MT" | "CFT" | "BRASS" | "CUM" | "TRIP"
-      measurement_method: "weighbridge" | "site_measurement" | "count"
+      material_unit: "MT" | "CFT" | "BRASS" | "CUM" | "TRIP" | "BAG" | "NOS"
+      measurement_method:
+        | "weighbridge"
+        | "site_measurement"
+        | "count"
+        | "manual_entry"
       order_status:
         | "draft"
         | "confirmed"
@@ -3863,8 +4127,13 @@ export const Constants = {
         "accepted_as_normal_loss",
       ],
       invoice_status: ["draft", "issued", "cancelled"],
-      material_unit: ["MT", "CFT", "BRASS", "CUM", "TRIP"],
-      measurement_method: ["weighbridge", "site_measurement", "count"],
+      material_unit: ["MT", "CFT", "BRASS", "CUM", "TRIP", "BAG", "NOS"],
+      measurement_method: [
+        "weighbridge",
+        "site_measurement",
+        "count",
+        "manual_entry",
+      ],
       order_status: [
         "draft",
         "confirmed",

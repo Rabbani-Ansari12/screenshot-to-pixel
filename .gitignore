@@ -44,3 +44,7 @@ supabase/.branches
 
 # bun.lock is the committed lockfile
 package-lock.json
+
+# Playwright
+test-results/
+playwright-report/

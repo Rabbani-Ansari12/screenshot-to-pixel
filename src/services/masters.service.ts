@@ -1,3 +1,7 @@
+/**
+ * Master data (customers & sites, providers, transporters, vehicles & drivers, materials, yards)
+ * from Supabase. Multi-table creates go through transactional RPCs.
+ */
 import type {
   BillView,
   Customer,
@@ -14,18 +18,22 @@ import type {
   Vehicle,
   Yard,
 } from "@/types";
-import { NotFoundError, clone, db, delay, logAudit, nextId } from "./core";
+import { AppError, check, rows, unwrap, unwrapMaybe, unwrapOne } from "./supabase/errors";
+import { fetchOrders, fetchPurchases, fetchTrips, indexBy, sb } from "./supabase/fetch";
 import {
-  toBillView,
-  toInvoiceView,
-  toOrderView,
-  toPaymentView,
-  toPurchaseView,
-  toTripView,
-} from "./views";
+  num,
+  toCustomer,
+  toDriver,
+  toMaterial,
+  toProvider,
+  toSite,
+  toTransporter,
+  toVehicle,
+  toYard,
+  unitToDb,
+} from "./supabase/mappers";
 
-const ACTIVE_ORDER = ["Confirmed", "In Progress", "On Hold"];
-
+// ---------- Customers ----------
 export interface CustomerRow extends Customer {
   siteCount: number;
   activeOrders: number;
@@ -33,23 +41,29 @@ export interface CustomerRow extends Customer {
   outstanding: number;
 }
 
-// TODO(backend): supabase.from("customers_view").select("*")
+async function customerRows(id?: string): Promise<CustomerRow[]> {
+  let customers = sb().from("customers").select("*").is("deleted_at", null);
+  let stats = sb().from("v_customer_stats").select("*");
+  let money = sb().from("v_customer_outstanding").select("*");
+  if (id) {
+    customers = customers.eq("id", id);
+    stats = stats.eq("customer_id", id);
+    money = money.eq("customer_id", id);
+  }
+  const [c, s, m] = await Promise.all([customers.order("name"), stats, money]);
+  const statsBy = indexBy(rows(s), (r) => r.customer_id);
+  const moneyBy = indexBy(rows(m), (r) => r.customer_id);
+  return rows(c).map((row) => ({
+    ...toCustomer(row),
+    siteCount: num(statsBy.get(row.id)?.site_count),
+    activeOrders: num(statsBy.get(row.id)?.active_orders),
+    totalInvoiced: num(moneyBy.get(row.id)?.invoiced_amount),
+    outstanding: num(moneyBy.get(row.id)?.outstanding_amount),
+  }));
+}
+
 export async function listCustomers(): Promise<CustomerRow[]> {
-  await delay();
-  return clone(
-    db.customers.map((c) => {
-      const invoices = db.invoices.filter((i) => i.customerId === c.id).map(toInvoiceView);
-      return {
-        ...c,
-        siteCount: db.sites.filter((s) => s.customerId === c.id).length,
-        activeOrders: db.orders.filter(
-          (o) => o.customerId === c.id && ACTIVE_ORDER.includes(o.status),
-        ).length,
-        totalInvoiced: invoices.reduce((s, i) => s + i.total, 0),
-        outstanding: invoices.reduce((s, i) => s + i.balance, 0),
-      };
-    }),
-  );
+  return customerRows();
 }
 
 export async function getCustomer(id: string): Promise<{
@@ -60,34 +74,31 @@ export async function getCustomer(id: string): Promise<{
   payments: PaymentView[];
   trips: TripView[];
 }> {
-  await delay();
-  const c = db.customers.find((x) => x.id === id);
-  if (!c) throw new NotFoundError(`Customer ${id}`);
-  const orders = db.orders.filter((o) => o.customerId === id);
-  const orderIds = new Set(orders.map((o) => o.id));
-  const invoices = db.invoices.filter((i) => i.customerId === id).map(toInvoiceView);
-  return clone({
-    customer: {
-      ...c,
-      siteCount: 0,
-      activeOrders: orders.filter((o) => ACTIVE_ORDER.includes(o.status)).length,
-      totalInvoiced: invoices.reduce((s, i) => s + i.total, 0),
-      outstanding: invoices.reduce((s, i) => s + i.balance, 0),
-    },
-    sites: db.sites.filter((s) => s.customerId === id),
-    orders: orders.map(toOrderView).reverse(),
-    invoices: invoices.reverse(),
-    payments: db.payments
-      .filter((p) => p.partyType === "Customer" && p.partyId === id)
-      .map(toPaymentView)
-      .reverse(),
-    trips: db.trips
-      .filter((t) => orderIds.has(t.orderId))
-      .map(toTripView)
-      .reverse(),
-  });
+  const [customers, sites, orders, trips] = await Promise.all([
+    customerRows(id),
+    sb()
+      .from("construction_sites")
+      .select("*")
+      .eq("customer_id", id)
+      .is("deleted_at", null)
+      .order("name"),
+    fetchOrders({ customer_id: id }),
+    fetchTrips({ customer_id: id }, 200),
+  ]);
+  const customer = customers[0];
+  if (!customer) throw new AppError("Customer not found.", null, "not_found");
+  return {
+    customer,
+    sites: rows(sites).map(toSite),
+    orders,
+    // Invoices and payments move to Supabase with the finance phase.
+    invoices: [],
+    payments: [],
+    trips,
+  };
 }
 
+// ---------- Providers ----------
 export interface ProviderRow extends Provider {
   materialNames: string[];
   purchaseValue: number;
@@ -95,23 +106,39 @@ export interface ProviderRow extends Provider {
   payable: number;
 }
 
+async function providerRows(id?: string): Promise<ProviderRow[]> {
+  let providers = sb().from("material_providers").select("*").is("deleted_at", null);
+  let stats = sb().from("v_provider_stats").select("*");
+  let payable = sb().from("v_provider_payable").select("*");
+  if (id) {
+    providers = providers.eq("id", id);
+    stats = stats.eq("provider_id", id);
+    payable = payable.eq("provider_id", id);
+  }
+  const [p, s, pay, m] = await Promise.all([
+    providers.order("name"),
+    stats,
+    payable,
+    sb().from("materials").select("id, name"),
+  ]);
+  const statsBy = indexBy(rows(s), (r) => r.provider_id);
+  const payBy = indexBy(rows(pay), (r) => r.provider_id);
+  const names = new Map(rows(m).map((x) => [x.id, x.name]));
+  return rows(p).map((row) => {
+    const st = statsBy.get(row.id);
+    const materialIds = st?.material_ids ?? [];
+    return {
+      ...toProvider(row, materialIds),
+      materialNames: materialIds.map((mid) => names.get(mid) ?? "—"),
+      purchaseValue: num(st?.purchase_value),
+      purchaseCount: num(st?.purchase_count),
+      payable: num(payBy.get(row.id)?.payable_amount),
+    };
+  });
+}
+
 export async function listProviders(): Promise<ProviderRow[]> {
-  await delay();
-  return clone(
-    db.providers.map((p) => {
-      const purchases = db.purchases.filter((x) => x.providerId === p.id).map(toPurchaseView);
-      return {
-        ...p,
-        materialNames: p.materialIds.map((m) => db.materials.find((x) => x.id === m)?.name ?? m),
-        purchaseValue: purchases.reduce((s, x) => s + x.totalAmount, 0),
-        purchaseCount: purchases.length,
-        payable: db.bills
-          .filter((b) => b.kind === "Provider" && b.partyId === p.id)
-          .map(toBillView)
-          .reduce((s, b) => s + b.outstanding, 0),
-      };
-    }),
-  );
+  return providerRows();
 }
 
 export async function getProvider(id: string): Promise<{
@@ -121,83 +148,22 @@ export async function getProvider(id: string): Promise<{
   bills: BillView[];
   payments: PaymentView[];
 }> {
-  const rows = await listProviders();
-  const provider = rows.find((p) => p.id === id);
-  if (!provider) throw new NotFoundError(`Provider ${id}`);
-  return clone({
-    provider,
-    purchases: db.purchases
-      .filter((p) => p.providerId === id)
-      .map(toPurchaseView)
-      .reverse(),
-    trips: db.trips
-      .filter((t) => t.providerId === id && !t.yardId)
-      .map(toTripView)
-      .reverse(),
-    bills: db.bills
-      .filter((b) => b.kind === "Provider" && b.partyId === id)
-      .map(toBillView)
-      .reverse(),
-    payments: db.payments
-      .filter((p) => p.partyType === "Provider" && p.partyId === id)
-      .map(toPaymentView)
-      .reverse(),
-  });
+  const [providers, purchases, trips] = await Promise.all([
+    providerRows(id),
+    fetchPurchases({ provider_id: id }),
+    fetchTrips({ provider_id: id }, 200),
+  ]);
+  const provider = providers[0];
+  if (!provider) throw new AppError("Provider not found.", null, "not_found");
+  return { provider, purchases, trips, bills: [], payments: [] };
 }
 
+// ---------- Transporters & vehicles ----------
 export interface TransporterRow extends Transporter {
   vehicleCount: number;
   tripCount: number;
   shortageTrips: number;
   payable: number;
-}
-
-export async function listTransporters(): Promise<TransporterRow[]> {
-  await delay();
-  return clone(
-    db.transporters.map((t) => {
-      const trips = db.trips.filter((x) => x.transporterId === t.id).map(toTripView);
-      return {
-        ...t,
-        vehicleCount: db.vehicles.filter((v) => v.transporterId === t.id).length,
-        tripCount: trips.length,
-        shortageTrips: trips.filter((x) => x.shortageStatus && x.shortageStatus !== "Normal")
-          .length,
-        payable: db.bills
-          .filter((b) => b.kind === "Transporter" && b.partyId === t.id)
-          .map(toBillView)
-          .reduce((s, b) => s + b.outstanding, 0),
-      };
-    }),
-  );
-}
-
-export async function getTransporter(id: string): Promise<{
-  transporter: TransporterRow;
-  vehicles: VehicleRow[];
-  trips: TripView[];
-  bills: BillView[];
-  payments: PaymentView[];
-}> {
-  const rows = await listTransporters();
-  const transporter = rows.find((t) => t.id === id);
-  if (!transporter) throw new NotFoundError(`Transporter ${id}`);
-  return clone({
-    transporter,
-    vehicles: db.vehicles.filter((v) => v.transporterId === id).map(vehicleRow),
-    trips: db.trips
-      .filter((t) => t.transporterId === id)
-      .map(toTripView)
-      .reverse(),
-    bills: db.bills
-      .filter((b) => b.kind === "Transporter" && b.partyId === id)
-      .map(toBillView)
-      .reverse(),
-    payments: db.payments
-      .filter((p) => p.partyType === "Transporter" && p.partyId === id)
-      .map(toPaymentView)
-      .reverse(),
-  });
 }
 
 export interface VehicleRow extends Vehicle {
@@ -210,75 +176,148 @@ export interface VehicleRow extends Vehicle {
   recurringShortage: boolean;
 }
 
-function vehicleRow(v: Vehicle): VehicleRow {
-  const trips = db.trips.filter((t) => t.vehicleId === v.id).map(toTripView);
-  const delivered = trips.filter((t) => t.difference !== null);
-  const shortageCount = delivered.filter((t) => t.shortageStatus !== "Normal").length;
-  const driver = db.drivers.find((d) => d.id === v.driverId);
-  return {
-    ...v,
-    transporterName: db.transporters.find((t) => t.id === v.transporterId)?.name ?? "—",
-    driverName: driver?.name ?? "—",
-    driverPhone: driver?.phone ?? "",
-    tripCount: trips.length,
-    shortageCount,
-    avgDifference: delivered.length
-      ? Math.round(
-          (delivered.reduce((s, t) => s + (t.difference ?? 0), 0) / delivered.length) * 100,
-        ) / 100
-      : 0,
-    recurringShortage: shortageCount >= 3,
-  };
+async function vehicleRows(
+  filter: { id?: string; transporterId?: string } = {},
+): Promise<VehicleRow[]> {
+  let vehicles = sb().from("vehicles").select("*").is("deleted_at", null);
+  let stats = sb().from("v_vehicle_shortage_stats").select("*");
+  if (filter.id) {
+    vehicles = vehicles.eq("id", filter.id);
+    stats = stats.eq("vehicle_id", filter.id);
+  }
+  if (filter.transporterId) {
+    vehicles = vehicles.eq("transporter_id", filter.transporterId);
+    stats = stats.eq("transporter_id", filter.transporterId);
+  }
+  const [v, s, t, d] = await Promise.all([
+    vehicles.order("vehicle_number"),
+    stats,
+    sb().from("transporters").select("id, name"),
+    sb().from("drivers").select("*"),
+  ]);
+  const statsBy = indexBy(rows(s), (r) => r.vehicle_id);
+  const transporters = new Map(rows(t).map((x) => [x.id, x.name]));
+  const drivers = indexBy(rows(d), (r) => r.id);
+  return rows(v).map((row) => {
+    const st = statsBy.get(row.id);
+    const driver = row.default_driver_id ? drivers.get(row.default_driver_id) : undefined;
+    return {
+      ...toVehicle(row),
+      transporterName: transporters.get(row.transporter_id) ?? "—",
+      driverName: driver?.full_name ?? "—",
+      driverPhone: driver?.phone ?? "",
+      tripCount: num(st?.trip_count),
+      shortageCount: num(st?.needs_verification_count) + num(st?.confirmed_shortage_count),
+      avgDifference: Math.round(num(st?.avg_difference_mt) * 100) / 100,
+      recurringShortage: Boolean(st?.has_recurring_shortage),
+    };
+  });
+}
+
+async function transporterRows(id?: string): Promise<TransporterRow[]> {
+  let transporters = sb().from("transporters").select("*").is("deleted_at", null);
+  let stats = sb().from("v_vehicle_shortage_stats").select("*");
+  let payable = sb().from("v_transporter_payable").select("*");
+  if (id) {
+    transporters = transporters.eq("id", id);
+    stats = stats.eq("transporter_id", id);
+    payable = payable.eq("transporter_id", id);
+  }
+  const [t, s, pay] = await Promise.all([transporters.order("name"), stats, payable]);
+  const payBy = indexBy(rows(pay), (r) => r.transporter_id);
+  const statRows = rows(s);
+  return rows(t).map((row) => {
+    const mine = statRows.filter((x) => x.transporter_id === row.id);
+    return {
+      ...toTransporter(row),
+      vehicleCount: mine.length,
+      tripCount: mine.reduce((a, x) => a + num(x.trip_count), 0),
+      shortageTrips: mine.reduce(
+        (a, x) => a + num(x.needs_verification_count) + num(x.confirmed_shortage_count),
+        0,
+      ),
+      payable: num(payBy.get(row.id)?.payable_amount),
+    };
+  });
+}
+
+export async function listTransporters(): Promise<TransporterRow[]> {
+  return transporterRows();
+}
+
+export async function getTransporter(id: string): Promise<{
+  transporter: TransporterRow;
+  vehicles: VehicleRow[];
+  trips: TripView[];
+  bills: BillView[];
+  payments: PaymentView[];
+}> {
+  const [transporters, vehicles, trips] = await Promise.all([
+    transporterRows(id),
+    vehicleRows({ transporterId: id }),
+    fetchTrips({ transporter_id: id }, 200),
+  ]);
+  const transporter = transporters[0];
+  if (!transporter) throw new AppError("Transporter not found.", null, "not_found");
+  return { transporter, vehicles, trips, bills: [], payments: [] };
 }
 
 export async function listVehicles(): Promise<VehicleRow[]> {
-  await delay();
-  return clone(db.vehicles.map(vehicleRow));
+  return vehicleRows();
 }
 
 export async function getVehicle(
   id: string,
 ): Promise<{ vehicle: VehicleRow; trips: TripView[]; driver: Driver | null }> {
-  await delay();
-  const v = db.vehicles.find((x) => x.id === id);
-  if (!v) throw new NotFoundError(`Vehicle ${id}`);
-  return clone({
-    vehicle: vehicleRow(v),
-    trips: db.trips
-      .filter((t) => t.vehicleId === id)
-      .map(toTripView)
-      .reverse(),
-    driver: db.drivers.find((d) => d.id === v.driverId) ?? null,
-  });
+  const [vehicles, trips] = await Promise.all([
+    vehicleRows({ id }),
+    fetchTrips({ vehicle_id: id }, 200),
+  ]);
+  const vehicle = vehicles[0];
+  if (!vehicle) throw new AppError("Vehicle not found.", null, "not_found");
+  const driver = vehicle.driverId
+    ? unwrapMaybe(await sb().from("drivers").select("*").eq("id", vehicle.driverId).maybeSingle())
+    : null;
+  return { vehicle, trips, driver: driver ? toDriver(driver) : null };
 }
 
+// ---------- Materials ----------
 export interface MaterialRow extends Material {
   yardStock: number;
   deliveredQty: number;
   orderCount: number;
 }
 
-function materialRow(m: Material): MaterialRow {
-  return {
-    ...m,
-    yardStock:
-      Math.round(
-        db.stockMovements.filter((s) => s.materialId === m.id).reduce((a, s) => a + s.quantity, 0) *
-          100,
-      ) / 100,
-    deliveredQty:
-      Math.round(
-        db.trips
-          .filter((t) => t.materialId === m.id)
-          .reduce((a, t) => a + (t.delivery?.net ?? 0), 0) * 100,
-      ) / 100,
-    orderCount: db.orders.filter((o) => o.items.some((i) => i.materialId === m.id)).length,
-  };
+async function materialRows(id?: string): Promise<MaterialRow[]> {
+  let materials = sb().from("materials").select("*").is("deleted_at", null);
+  let stats = sb().from("v_material_stats").select("*");
+  let rates = sb()
+    .from("material_rates")
+    .select("material_id, rate_type, rate, effective_from, provider_id");
+  if (id) {
+    materials = materials.eq("id", id);
+    stats = stats.eq("material_id", id);
+    rates = rates.eq("material_id", id);
+  }
+  const [m, s, r] = await Promise.all([materials.order("name"), stats, rates]);
+  const statsBy = indexBy(rows(s), (x) => x.material_id);
+  const rateRows = rows(r);
+  return rows(m).map((row) => {
+    const st = statsBy.get(row.id);
+    return {
+      ...toMaterial(
+        row,
+        rateRows.filter((x) => x.material_id === row.id),
+      ),
+      yardStock: Math.round(num(st?.yard_stock) * 100) / 100,
+      deliveredQty: Math.round(num(st?.delivered_qty) * 100) / 100,
+      orderCount: num(st?.order_count),
+    };
+  });
 }
 
 export async function listMaterials(): Promise<MaterialRow[]> {
-  await delay();
-  return clone(db.materials.map(materialRow));
+  return materialRows();
 }
 
 export async function getMaterial(id: string): Promise<{
@@ -287,28 +326,20 @@ export async function getMaterial(id: string): Promise<{
   orders: OrderView[];
   trips: TripView[];
 }> {
-  await delay();
-  const m = db.materials.find((x) => x.id === id);
-  if (!m) throw new NotFoundError(`Material ${id}`);
-  return clone({
-    material: materialRow(m),
-    purchases: db.purchases
-      .filter((p) => p.materialId === id)
-      .map(toPurchaseView)
-      .reverse(),
-    orders: db.orders
-      .filter((o) => o.items.some((i) => i.materialId === id))
-      .map(toOrderView)
-      .reverse(),
-    trips: db.trips
-      .filter((t) => t.materialId === id)
-      .map(toTripView)
-      .reverse()
-      .slice(0, 50),
-  });
+  const [materials, purchases, trips, orderIds] = await Promise.all([
+    materialRows(id),
+    fetchPurchases({ material_id: id }),
+    fetchTrips({ material_id: id }, 50),
+    sb().from("order_items").select("order_id").eq("material_id", id),
+  ]);
+  const material = materials[0];
+  if (!material) throw new AppError("Material not found.", null, "not_found");
+  const ids = [...new Set(rows(orderIds).map((x) => x.order_id))];
+  const orders = ids.length ? (await fetchOrders()).filter((o) => ids.includes(o.id)) : [];
+  return { material, purchases, orders, trips };
 }
 
-/** Lightweight option lists for pickers in forms. */
+// ---------- Picker options ----------
 export interface MasterOptions {
   customers: Customer[];
   sites: Site[];
@@ -329,92 +360,162 @@ export interface MasterOptions {
 }
 
 export async function getMasterOptions(): Promise<MasterOptions> {
-  await delay(120);
-  return clone({
-    customers: db.customers,
-    sites: db.sites,
-    providers: db.providers,
-    transporters: db.transporters,
-    vehicles: db.vehicles.filter((v) => v.active),
-    drivers: db.drivers,
-    materials: db.materials.filter((m) => m.active),
-    yards: db.yards,
-    orders: db.orders
-      .map((o) => ({
-        id: o.id,
-        ref: o.ref,
-        customerId: o.customerId,
-        siteId: o.siteId,
-        status: o.status,
-        materialIds: o.items.map((i) => i.materialId),
-      }))
-      .reverse(),
-  });
+  const [c, s, p, pm, t, v, d, m, y, o] = await Promise.all([
+    sb().from("customers").select("*").is("deleted_at", null).eq("is_active", true).order("name"),
+    sb().from("construction_sites").select("*").is("deleted_at", null).order("name"),
+    sb()
+      .from("material_providers")
+      .select("*")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("name"),
+    sb().from("v_provider_stats").select("provider_id, material_ids"),
+    sb()
+      .from("transporters")
+      .select("*")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("name"),
+    sb()
+      .from("vehicles")
+      .select("*")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("vehicle_number"),
+    sb()
+      .from("drivers")
+      .select("*")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("full_name"),
+    sb().from("materials").select("*").is("deleted_at", null).eq("is_active", true).order("name"),
+    sb()
+      .from("stock_locations")
+      .select("*")
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .order("name"),
+    sb()
+      .from("v_order_list")
+      .select("id, order_code, customer_id, site_id, status, material_ids")
+      .order("order_date", { ascending: false })
+      .limit(500),
+  ]);
+  const providerMaterials = indexBy(rows(pm), (x) => x.provider_id);
+  const { orderStatusFromDb } = await import("./supabase/mappers");
+  return {
+    customers: rows(c).map(toCustomer),
+    sites: rows(s).map(toSite),
+    providers: rows(p).map((x) => toProvider(x, providerMaterials.get(x.id)?.material_ids ?? [])),
+    transporters: rows(t).map(toTransporter),
+    vehicles: rows(v).map(toVehicle),
+    drivers: rows(d).map(toDriver),
+    materials: rows(m).map((x) => toMaterial(x)),
+    yards: rows(y).map(toYard),
+    orders: rows(o).map((x) => ({
+      id: x.id ?? "",
+      ref: x.order_code ?? "",
+      customerId: x.customer_id ?? "",
+      siteId: x.site_id ?? "",
+      status: orderStatusFromDb(x.status),
+      materialIds: x.material_ids ?? [],
+    })),
+  };
 }
 
 // ---------- Add dialogs ----------
-// TODO(backend): supabase.from("<table>").insert(...)
+const blank = (v: string | undefined) => (v && v.trim() ? v.trim() : null);
+
 export async function addCustomer(
   input: Omit<Customer, "id" | "active" | "createdAt"> & { siteName: string; siteAddress: string },
 ): Promise<Customer> {
-  await delay(350);
-  const id = nextId("CUS-", db.customers, 3);
-  const { siteName, siteAddress, ...rest } = input;
-  const customer: Customer = { ...rest, id, active: true, createdAt: "2026-11-10" };
-  db.customers.push(customer);
-  if (siteName)
-    db.sites.push({
-      id: nextId("SITE-", db.sites, 2),
-      customerId: id,
-      name: siteName,
-      address: siteAddress,
-      city: input.city,
-      contactName: input.contactName,
-      contactPhone: input.phone,
-      active: true,
-    });
-  logAudit({ action: "Created", entityType: "Customer", entityId: id, entityLabel: customer.name });
-  return clone(customer);
+  const id = unwrap(
+    await sb().rpc("create_customer", {
+      p_customer: {
+        name: input.name,
+        customer_type: input.type,
+        gstin: blank(input.gstin),
+        contact_name: input.contactName,
+        phone: input.phone,
+        email: input.email,
+        city: input.city,
+        state: input.state,
+        billing_address: input.billingAddress,
+        credit_days: input.creditDays,
+      },
+      p_site: input.siteName
+        ? {
+            name: input.siteName,
+            address: input.siteAddress,
+            city: input.city,
+            contact_name: input.contactName,
+            contact_phone: input.phone,
+          }
+        : null,
+    } as never),
+  );
+  return toCustomer(
+    unwrapOne(await sb().from("customers").select("*").eq("id", id).maybeSingle(), "Customer"),
+  );
 }
 
 export async function addSite(input: Omit<Site, "id" | "active">): Promise<Site> {
-  await delay(300);
-  const site: Site = { ...input, id: nextId("SITE-", db.sites, 2), active: true };
-  db.sites.push(site);
-  logAudit({ action: "Created", entityType: "Site", entityId: site.id, entityLabel: site.name });
-  return clone(site);
+  const row = unwrap(
+    await sb()
+      .from("construction_sites")
+      .insert({
+        customer_id: input.customerId,
+        name: input.name,
+        address: blank(input.address),
+        city: blank(input.city),
+        contact_name: blank(input.contactName),
+        contact_phone: blank(input.contactPhone),
+      })
+      .select("*")
+      .single(),
+  );
+  return toSite(row);
 }
 
 export async function addProvider(input: Omit<Provider, "id" | "active">): Promise<Provider> {
-  await delay(350);
-  const provider: Provider = { ...input, id: nextId("PRV-", db.providers, 3), active: true };
-  db.providers.push(provider);
-  logAudit({
-    action: "Created",
-    entityType: "Provider",
-    entityId: provider.id,
-    entityLabel: provider.name,
-  });
-  return clone(provider);
+  const id = unwrap(
+    await sb().rpc("create_provider", {
+      p_provider: {
+        name: input.name,
+        city: input.city,
+        gstin: blank(input.gstin),
+        contact_name: input.contactName,
+        phone: input.phone,
+        payment_terms_days: input.paymentTermsDays,
+      },
+      p_material_ids: input.materialIds,
+    }),
+  );
+  const row = unwrapOne(
+    await sb().from("material_providers").select("*").eq("id", id).maybeSingle(),
+    "Provider",
+  );
+  return toProvider(row, input.materialIds);
 }
 
 export async function addTransporter(
   input: Omit<Transporter, "id" | "active">,
 ): Promise<Transporter> {
-  await delay(350);
-  const transporter: Transporter = {
-    ...input,
-    id: nextId("TRN-", db.transporters, 3),
-    active: true,
-  };
-  db.transporters.push(transporter);
-  logAudit({
-    action: "Created",
-    entityType: "Transporter",
-    entityId: transporter.id,
-    entityLabel: transporter.name,
-  });
-  return clone(transporter);
+  const row = unwrap(
+    await sb()
+      .from("transporters")
+      .insert({
+        name: input.name,
+        city: blank(input.city),
+        gstin: blank(input.gstin),
+        contact_name: blank(input.contactName),
+        phone: blank(input.phone),
+        rate_per_trip: input.ratePerTrip,
+      })
+      .select("*")
+      .single(),
+  );
+  return toTransporter(row);
 }
 
 export async function addVehicle(
@@ -424,76 +525,59 @@ export async function addVehicle(
     licenseNo: string;
   },
 ): Promise<Vehicle> {
-  await delay(350);
-  const driver: Driver = {
-    id: nextId("DRV-", db.drivers, 2),
-    name: input.driverName,
-    phone: input.driverPhone,
-    licenseNo: input.licenseNo,
-    transporterId: input.transporterId,
-  };
-  db.drivers.push(driver);
-  const vehicle: Vehicle = {
-    id: nextId("VEH-", db.vehicles, 2),
-    plate: input.plate.toUpperCase(),
-    transporterId: input.transporterId,
-    driverId: driver.id,
-    type: input.type,
-    capacity: input.capacity,
-    active: true,
-  };
-  db.vehicles.push(vehicle);
-  logAudit({
-    action: "Created",
-    entityType: "Vehicle",
-    entityId: vehicle.id,
-    entityLabel: vehicle.plate,
-  });
-  return clone(vehicle);
+  const id = unwrap(
+    await sb().rpc("create_vehicle", {
+      p_vehicle: {
+        transporter_id: input.transporterId,
+        vehicle_number: input.plate,
+        vehicle_type: input.type,
+        capacity_mt: input.capacity || null,
+      },
+      p_driver: input.driverName
+        ? { full_name: input.driverName, phone: input.driverPhone, license_number: input.licenseNo }
+        : null,
+    } as never),
+  );
+  return toVehicle(
+    unwrapOne(await sb().from("vehicles").select("*").eq("id", id).maybeSingle(), "Vehicle"),
+  );
 }
 
 export async function addMaterial(
   input: Omit<Material, "id" | "active" | "rateHistory">,
 ): Promise<Material> {
-  await delay(350);
-  const material: Material = {
-    ...input,
-    id: nextId("MAT-", db.materials, 3),
-    active: true,
-    rateHistory: [
-      { date: "2026-11-10", purchaseRate: input.purchaseRate, sellingRate: input.sellingRate },
-    ],
-  };
-  db.materials.push(material);
-  logAudit({
-    action: "Created",
-    entityType: "Material",
-    entityId: material.id,
-    entityLabel: material.name,
-  });
-  return clone(material);
+  const id = unwrap(
+    await sb().rpc("create_material", {
+      p_material: {
+        name: input.name,
+        category: input.category,
+        unit: unitToDb(input.unit),
+        hsn_code: input.hsn,
+        gst_rate: input.gstRate,
+        purchase_rate: input.purchaseRate,
+        selling_rate: input.sellingRate,
+        shortage_tolerance: input.tolerance,
+      },
+    }),
+  );
+  const [m] = await materialRows(id);
+  if (!m) throw new AppError("Material not found.", null, "not_found");
+  return m;
 }
 
-/** Shortage tolerance per material (Settings page). */
-// TODO(backend): supabase.from("materials").update({ tolerance }).in("id", ids)
+/** New stock yard (owner only, enforced by RLS). */
+export async function addYard(input: { name: string; location: string }): Promise<Yard> {
+  const row = unwrap(
+    await sb()
+      .from("stock_locations")
+      .insert({ name: input.name, address: blank(input.location) })
+      .select("*")
+      .single(),
+  );
+  return toYard(row);
+}
+
+/** Shortage tolerance per material (Settings page, owner only). */
 export async function updateTolerances(values: Record<string, number>): Promise<void> {
-  await delay(350);
-  Object.entries(values).forEach(([id, tolerance]) => {
-    const m = db.materials.find((x) => x.id === id);
-    if (!m || m.tolerance === tolerance) return;
-    logAudit({
-      action: "Updated",
-      entityType: "Material",
-      entityId: id,
-      entityLabel: m.name,
-      changes: [
-        {
-          field: "Shortage tolerance",
-          from: `${m.tolerance} ${m.unit}`,
-          to: `${tolerance} ${m.unit}`,
-        },
-      ],
-    });
-    m.tolerance = tolerance;
-  });
+  check(await sb().rpc("set_material_tolerances", { p_values: values }));
 }

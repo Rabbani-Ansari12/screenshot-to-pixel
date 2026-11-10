@@ -13,6 +13,8 @@ Postgres on Supabase. The schema is defined only by the ordered files in `supaba
 | `…120600_views` | Reporting views |
 | `…120700_storage` | Private `documents` bucket and its policies |
 | `…120800_indexes` | Indexes on every FK, lookups, statuses and dates |
+| `…130000_enum_values` | Units `BAG`, `NOS`; measurement method `manual_entry` |
+| `…130100_app_logic` | `audit_logs.reason`, `provider_materials`, purchase cost breakdown, list views, transactional RPCs |
 
 ## Conventions
 
@@ -121,6 +123,28 @@ stock movements.
 | `v_order_profit` | Sales − purchase − transport − loading/unloading − labour − other = estimated profit; `estimated` vs `settled`. Customer receipts are never profit |
 | `v_stock_balance` | Received, issued, adjusted and balance per yard and material |
 | `v_vehicle_shortage_stats` | Delivery differences per vehicle, recurring flag (3+ in 90 days) |
+
+## App functions (RPCs, `SECURITY INVOKER` — RLS still applies)
+
+| Function | Does, in one transaction |
+| --- | --- |
+| `create_customer(customer, site)` | Customer + first site |
+| `create_provider(provider, material_ids)` | Provider + supplied materials |
+| `create_vehicle(vehicle, driver)` | Driver + vehicle linked to them |
+| `create_material(material)` | Material + opening purchase / selling rates (tolerance defaults from settings) |
+| `create_order(order, items)` / `update_order(id, order, items, reason)` | Order + items. Changing or removing an existing quantity / rate needs a reason; items with trips cannot be removed |
+| `create_purchase(purchase, items)` | Purchase + items with labelled costs (`cost_breakdown`); stock follows from the triggers |
+| `create_trip(trip, loading, delivery)` | Trip + loading weight (+ delivery weight); links the order item and direct purchase; delivery check, trip status and yard stock follow from the triggers |
+| `save_weight_record(trip, type, values, reason)` | Adds a missing weight, or corrects one (reason required) |
+| `record_trip_investigation(trip, outcome, notes, status)` | Shortage-check outcome on the delivery record |
+| `set_material_tolerances(values)` | Owner only: tolerance per material |
+
+Corrections set `app.change_reason` for the transaction; `audit_row_change()` stores it in
+`audit_logs.reason` next to the old row, new row and user.
+
+List views for server-side pagination / search: `v_trip_list`, `v_order_list`,
+`v_purchase_list`, `v_stock_ledger` (running balance), plus `v_material_stats`,
+`v_provider_stats`, `v_customer_stats`.
 
 ## Security
 

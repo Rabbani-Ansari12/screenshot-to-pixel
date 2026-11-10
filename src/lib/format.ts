@@ -88,8 +88,8 @@ export function formatMonth(value: string): string {
   );
 }
 
-/** "5 min ago", "yesterday", or a date. Relative to the demo's fixed "now". */
-export function formatRelative(value: string, now = DEMO_NOW): string {
+/** "5 min ago", "yesterday", or a date. */
+export function formatRelative(value: string, now = new Date().toISOString()): string {
   const diff = (Date.parse(now) - Date.parse(value)) / 60_000;
   if (diff < 1) return "just now";
   if (diff < 60) return `${Math.round(diff)} min ago`;
@@ -99,9 +99,36 @@ export function formatRelative(value: string, now = DEMO_NOW): string {
   return formatDate(value);
 }
 
-/** The mock data is anchored to this moment (IST). */
+/** The sample data in src/data is anchored to this moment (IST). Live pages use todayIST(). */
 export const DEMO_NOW = "2026-11-10T12:30:00+05:30";
 export const DEMO_TODAY = "2026-11-10";
+
+const istParts = (d: Date) =>
+  Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
+  ) as Record<string, string>;
+
+/** Today's date in India, yyyy-MM-dd. */
+export function todayIST(now = new Date()): string {
+  const p = istParts(now);
+  return `${p["year"]}-${p["month"]}-${p["day"]}`;
+}
+
+/** Current IST time for <input type="datetime-local">, yyyy-MM-ddTHH:mm. */
+export function nowISTLocal(now = new Date()): string {
+  const p = istParts(now);
+  return `${p["year"]}-${p["month"]}-${p["day"]}T${p["hour"]}:${p["minute"]}`;
+}
 
 export function initials(name: string): string {
   return name

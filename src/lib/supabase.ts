@@ -5,10 +5,23 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+export type { Json } from "@/types/database";
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
 
 let client: TypedSupabaseClient | undefined;
+
+/** True when the public URL and key are set (or a client was injected, e.g. in tests). */
+export function isSupabaseConfigured(): boolean {
+  return Boolean(
+    client || (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY),
+  );
+}
+
+/** Replaces the shared client. Tests use this to inject an in-memory fake. */
+export function setSupabaseClient(next: TypedSupabaseClient | undefined): void {
+  client = next;
+}
 
 /** Returns the shared client, creating it on first use. Throws a clear error if env vars are missing. */
 export function getSupabase(): TypedSupabaseClient {

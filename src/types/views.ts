@@ -98,6 +98,8 @@ export interface ExpenseView extends Expense {
 }
 
 export interface StockMovementView extends StockMovement {
+  /** Human-readable reference (purchase / trip code) when referenceId is a database id. */
+  referenceLabel?: string;
   materialName: string;
   unit: Unit;
   yardName: string;

@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import type { OrderStatus } from "@/types";
 import { Button } from "@/components/ui/button";
-import { DataTable, optionsFrom } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { ErrorState, KpiCard } from "@/components/common";
 import { PageHeader } from "@/components/page-header";
 import { orderColumns } from "@/components/record-columns";
-import { useOrders } from "@/hooks/queries";
+import { useMasterOptions, useOrderSummary, useOrdersPage } from "@/hooks/queries";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { useAuth } from "@/lib/auth";
 import { formatINRCompact } from "@/lib/format";
 import { ClipboardList, PackageCheck, PauseCircle, Truck } from "lucide-react";
@@ -21,10 +23,12 @@ export const ORDER_STATUSES: OrderStatus[] = [
 ];
 
 export function OrdersPage() {
-  const { data, isLoading, error } = useOrders();
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useOrdersPage(query);
+  const { data: summary } = useOrderSummary();
+  const { data: options } = useMasterOptions();
   const { can } = useAuth();
   if (error) return <ErrorState error={error} />;
-  const active = data?.filter((o) => ["Confirmed", "In Progress"].includes(o.status)) ?? [];
   return (
     <>
       <PageHeader
@@ -41,16 +45,16 @@ export function OrdersPage() {
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Active orders" value={active.length} icon={ClipboardList} />
+        <KpiCard label="Active orders" value={summary?.active ?? "—"} icon={ClipboardList} />
         <KpiCard
           label="Trips on these orders"
-          value={active.reduce((s, o) => s + o.tripCount, 0)}
+          value={summary?.activeTrips ?? "—"}
           icon={Truck}
           tone="blue"
         />
         <KpiCard
           label="Completed"
-          value={data?.filter((o) => o.status === "Completed").length ?? "—"}
+          value={summary?.completed ?? "—"}
           icon={PackageCheck}
           tone="green"
         />
@@ -58,16 +62,19 @@ export function OrdersPage() {
           label={can("view_financial_reports") ? "Open order value" : "On hold"}
           value={
             can("view_financial_reports")
-              ? formatINRCompact(active.reduce((s, o) => s + o.orderValue, 0))
-              : (data?.filter((o) => o.status === "On Hold").length ?? "—")
+              ? summary
+                ? formatINRCompact(summary.openValue)
+                : "—"
+              : (summary?.onHold ?? "—")
           }
           icon={PauseCircle}
           tone="amber"
         />
       </div>
       <DataTable
-        data={data}
-        isLoading={isLoading}
+        data={data?.rows}
+        isLoading={isLoading || !query}
+        server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
         columns={orderColumns({ showProfit: can("view_financial_reports") })}
         getRowId={(o) => o.id}
         rowHref={(o) => `/orders/${o.id}`}
@@ -85,8 +92,8 @@ export function OrdersPage() {
           {
             id: "customer",
             label: "Customers",
-            options: optionsFrom(data?.map((o) => o.customerName) ?? []),
-            value: (o) => o.customerName,
+            options: (options?.customers ?? []).map((c) => ({ value: c.id, label: c.name })),
+            value: (o) => o.customerId,
           },
         ]}
         dateValue={(o) => o.orderDate}

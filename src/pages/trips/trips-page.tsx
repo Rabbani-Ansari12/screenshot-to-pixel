@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import type { TripStatus } from "@/types";
 import { Button } from "@/components/ui/button";
-import { DataTable, optionsFrom } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { ErrorState } from "@/components/common";
 import { PageHeader } from "@/components/page-header";
 import { tripColumns } from "@/components/record-columns";
-import { useTrips } from "@/hooks/queries";
+import { useMasterOptions, useTripsPage } from "@/hooks/queries";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { useAuth } from "@/lib/auth";
 
 export const TRIP_STATUSES: TripStatus[] = [
@@ -15,10 +17,13 @@ export const TRIP_STATUSES: TripStatus[] = [
   "Delivered",
   "Needs Verification",
   "Confirmed Shortage",
+  "Cancelled",
 ];
 
 export function TripsPage() {
-  const { data, isLoading, error } = useTrips();
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useTripsPage(query);
+  const { data: options } = useMasterOptions();
   const { can } = useAuth();
   if (error) return <ErrorState error={error} />;
   return (
@@ -37,8 +42,9 @@ export function TripsPage() {
         }
       />
       <DataTable
-        data={data}
-        isLoading={isLoading}
+        data={data?.rows}
+        isLoading={isLoading || !query}
+        server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
         columns={tripColumns()}
         getRowId={(t) => t.id}
         rowHref={(t) => `/trips/${t.id}`}
@@ -56,20 +62,20 @@ export function TripsPage() {
           {
             id: "material",
             label: "Materials",
-            options: optionsFrom(data?.map((t) => t.materialName) ?? []),
-            value: (t) => t.materialName,
+            options: (options?.materials ?? []).map((m) => ({ value: m.id, label: m.name })),
+            value: (t) => t.materialId,
           },
           {
             id: "transporter",
             label: "Transporters",
-            options: optionsFrom(data?.map((t) => t.transporterName) ?? []),
-            value: (t) => t.transporterName,
+            options: (options?.transporters ?? []).map((t) => ({ value: t.id, label: t.name })),
+            value: (t) => t.transporterId,
           },
           {
             id: "vehicle",
             label: "Vehicles",
-            options: optionsFrom(data?.map((t) => t.vehiclePlate) ?? []),
-            value: (t) => t.vehiclePlate,
+            options: (options?.vehicles ?? []).map((v) => ({ value: v.id, label: v.plate })),
+            value: (t) => t.vehicleId,
           },
         ]}
         dateValue={(t) => t.loading.at}

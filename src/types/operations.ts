@@ -26,7 +26,7 @@ export interface Order {
 }
 
 export type DeliveryMode = "Direct-to-Site" | "Stock-Yard";
-export type PurchaseStatus = "Recorded" | "Needs Verification" | "Billed";
+export type PurchaseStatus = "Recorded" | "Needs Verification" | "Billed" | "Cancelled";
 
 export interface Purchase {
   id: ID;
@@ -62,7 +62,7 @@ export interface WeighRecord {
 }
 
 export type TripStatus =
-  "Loaded" | "In Transit" | "Delivered" | "Needs Verification" | "Confirmed Shortage";
+  "Loaded" | "In Transit" | "Delivered" | "Needs Verification" | "Confirmed Shortage" | "Cancelled";
 export type ShortageStatus = "Normal" | "Needs Verification" | "Confirmed Shortage";
 
 export type InvestigationOutcome =
@@ -81,7 +81,10 @@ export interface Investigation {
 }
 
 export interface Trip {
+  /** Trip code, e.g. TRP-2026-00123 (shown everywhere and used in URLs). */
   id: ID;
+  /** Database id of the trip (live data only). */
+  uuid?: ID;
   orderId: ID;
   materialId: ID;
   providerId: ID;

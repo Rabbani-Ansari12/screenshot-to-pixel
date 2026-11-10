@@ -24,6 +24,7 @@ export type AuditAction =
   | "Disputed"
   | "Recorded"
   | "Deactivated"
+  | "Deleted"
   | "Permission changed";
 
 export interface AuditChange {
@@ -42,6 +43,8 @@ export interface AuditEvent {
   entityLabel: string;
   changes: AuditChange[];
   note: string;
+  /** Why the change was made (required for quantity / rate corrections). */
+  reason?: string;
 }
 
 export interface AppSettings {

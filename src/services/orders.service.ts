@@ -11,15 +11,11 @@ import type {
   PurchaseView,
   TripView,
 } from "@/types";
-import { NotFoundError, actingUser, clone, db, delay, logAudit, nextId } from "./core";
-import {
-  profitOf,
-  toInvoiceView,
-  toOrderView,
-  toPaymentView,
-  toPurchaseView,
-  toTripView,
-} from "./views";
+import { AppError, rows, unwrap, unwrapMaybe } from "./supabase/errors";
+import { fetchOrders, fetchPurchases, fetchTrips, orderItemsFor, sb } from "./supabase/fetch";
+import { num, orderPayload, orderStatusToDb, toOrder, toOrderView } from "./supabase/mappers";
+import { activeFilter, ilikeTerm, type Page, type TableQuery } from "./supabase/table-query";
+import { listEntityAudit } from "./admin.service";
 
 export interface OrderDetail {
   order: OrderView;
@@ -42,91 +38,148 @@ export interface OrderInput {
   status: OrderStatus;
   notes: string;
   items: Omit<OrderItem, "id">[];
+  /** Required when an existing quantity or rate changes (stored in the audit log). */
+  reason?: string;
 }
 
-// TODO(backend): supabase.from("orders_view").select("*").order("order_date", { ascending: false })
 export async function listOrders(): Promise<OrderView[]> {
-  await delay();
-  return clone(db.orders.map(toOrderView).reverse());
+  return fetchOrders();
 }
 
-// TODO(backend): fetch order + related rows in one RPC.
+const ORDER_SORT: Record<string, string> = {
+  ref: "order_code",
+  order: "order_code",
+  customer: "customer_name",
+  date: "order_date",
+  orderDate: "order_date",
+  expected: "expected_delivery",
+  status: "status",
+  value: "order_value",
+  progress: "delivered_qty",
+  materials: "materials_label",
+  profit: "estimated_profit",
+};
+
+/** Server-side paginated, filtered, sorted and searched order list. */
+export async function listOrdersPage(q: TableQuery): Promise<Page<OrderView>> {
+  let query = sb().from("v_order_list").select("*", { count: "exact" });
+  if (q.search.trim()) {
+    const t = ilikeTerm(q.search);
+    query = query.or(
+      `order_code.ilike.${t},customer_name.ilike.${t},site_name.ilike.${t},customer_reference.ilike.${t},materials_label.ilike.${t}`,
+    );
+  }
+  const status = activeFilter(q, "status");
+  if (status) query = query.eq("status", orderStatusToDb(status as OrderStatus));
+  const customer = activeFilter(q, "customer");
+  if (customer) query = query.eq("customer_id", customer);
+  const material = activeFilter(q, "material");
+  if (material) query = query.contains("material_ids", [material]);
+  if (q.from) query = query.gte("order_date", q.from);
+  if (q.to) query = query.lte("order_date", q.to);
+  const col = (q.sort && ORDER_SORT[q.sort.id]) ?? "order_date";
+  const desc = q.sort ? q.sort.desc : true;
+  const res = await query
+    .order(col as "order_date", { ascending: !desc })
+    .order("created_at", { ascending: false })
+    .range(q.page * q.pageSize, q.page * q.pageSize + q.pageSize - 1);
+  const list = rows(res);
+  const items = await orderItemsFor(list.map((r) => r.id ?? "").filter(Boolean));
+  return { rows: list.map((r) => toOrderView(r, items)), total: res.count ?? list.length };
+}
+
+async function orderRow(id: string) {
+  const row = unwrapMaybe(await sb().from("v_order_list").select("*").eq("id", id).maybeSingle());
+  if (!row) throw new AppError("Order not found.", null, "not_found");
+  return row;
+}
+
 export async function getOrder(id: string): Promise<OrderDetail> {
-  await delay();
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) throw new NotFoundError(`Order ${id}`);
-  const trips = db.trips.filter((t) => t.orderId === id);
-  const tripIds = new Set(trips.map((t) => t.id));
-  const invoices = db.invoices.filter((i) => i.orderId === id);
-  const invoiceIds = new Set(invoices.map((i) => i.id));
-  const purchases = db.purchases.filter((p) => p.orderId === id);
-  return clone({
-    order: toOrderView(order),
-    trips: trips.map(toTripView).reverse(),
-    purchases: purchases.map(toPurchaseView),
-    documents: db.documents.filter((d) => d.link && tripIds.has(d.link.id)),
-    invoices: invoices.map(toInvoiceView),
-    payments: db.payments
-      .filter((p) => p.againstType === "Invoice" && invoiceIds.has(p.againstId))
-      .map(toPaymentView),
-    profit: profitOf(
-      trips,
-      db.expenses.filter((e) => e.orderId === id),
-    ),
-    itemProgress: order.items.map((item) => {
-      const its = trips.filter((t) => t.materialId === item.materialId);
-      return {
-        itemId: item.id,
-        dispatched: its.reduce((s, t) => s + t.loading.net, 0),
-        delivered: its.reduce((s, t) => s + (t.delivery?.net ?? 0), 0),
-      };
-    }),
-    activity: db.auditEvents
-      .filter((e) => e.entityId === id || tripIds.has(e.entityId) || invoiceIds.has(e.entityId))
-      .slice(0, 25),
-  });
+  const [row, items, trips, purchases, profitRow, progress] = await Promise.all([
+    orderRow(id),
+    orderItemsFor([id]),
+    fetchTrips({ order_id: id }),
+    fetchPurchases({ order_id: id }),
+    sb().from("v_order_profit").select("*").eq("order_id", id).maybeSingle(),
+    sb().from("v_order_progress").select("*").eq("order_id", id),
+  ]);
+  const p = unwrapMaybe(profitRow);
+  const salesValue = num(p?.sales_value);
+  const profit = num(p?.estimated_profit);
+  const tripUuids = trips.map((t) => t.uuid ?? "").filter(Boolean);
+  const activity = await listEntityAudit([id, ...items.map((i) => i.id), ...tripUuids], 25);
+  return {
+    order: toOrderView(row, items),
+    trips,
+    purchases,
+    // Documents, invoices and payments move to Supabase with their own modules.
+    documents: [],
+    invoices: [],
+    payments: [],
+    profit: {
+      salesValue,
+      purchaseCost: num(p?.purchase_cost),
+      transportCost: num(p?.transport_cost),
+      loadingUnloading: num(p?.loading_unloading_cost),
+      labour: num(p?.labour_cost),
+      other: num(p?.other_expenses),
+      profit,
+      marginPct: salesValue ? (profit / salesValue) * 100 : 0,
+    },
+    itemProgress: rows(progress).map((x) => ({
+      itemId: x.order_item_id ?? "",
+      dispatched: num(x.dispatched_qty),
+      delivered: num(x.delivered_qty),
+    })),
+    activity,
+  };
 }
 
 export async function getOrderRecord(id: string): Promise<Order> {
-  await delay(120);
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) throw new NotFoundError(`Order ${id}`);
-  return clone(order);
+  const [row, items] = await Promise.all([orderRow(id), orderItemsFor([id])]);
+  return toOrder(row, items);
 }
 
-// TODO(backend): supabase.from("orders").insert(...) + order_items insert in a transaction.
+/** Creates the order and all its items in one transaction (RPC create_order). */
 export async function createOrder(input: OrderInput): Promise<Order> {
-  await delay(400);
-  const id = nextId("ORD-2026-", db.orders);
-  const order: Order = {
-    ...input,
-    id,
-    ref: id,
-    createdBy: actingUser(),
-    items: input.items.map((item, i) => ({ ...item, id: `${id}-${i + 1}` })),
-  };
-  db.orders.push(order);
-  logAudit({
-    action: "Created",
-    entityType: "Order",
-    entityId: id,
-    entityLabel: id,
-    changes: [{ field: "Status", from: "—", to: order.status }],
-  });
-  return clone(order);
+  const payload = orderPayload(input);
+  const res = unwrap(
+    await sb().rpc("create_order", { p_order: payload.order, p_items: payload.items }),
+  ) as { id: string };
+  return getOrderRecord(res.id);
 }
 
+/** Updates header + items in one transaction. Quantity / rate changes need input.reason. */
 export async function updateOrder(id: string, input: OrderInput): Promise<Order> {
-  await delay(400);
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) throw new NotFoundError(`Order ${id}`);
-  const changes = (["status", "expectedDelivery", "customerRef", "siteId"] as const)
-    .filter((k) => order[k] !== input[k])
-    .map((k) => ({ field: k, from: String(order[k]), to: String(input[k]) }));
-  Object.assign(order, {
-    ...input,
-    items: input.items.map((item, i) => ({ ...item, id: `${id}-${i + 1}` })),
-  });
-  logAudit({ action: "Updated", entityType: "Order", entityId: id, entityLabel: id, changes });
-  return clone(order);
+  const payload = orderPayload(input);
+  unwrap(
+    await sb().rpc("update_order", {
+      p_order_id: id,
+      p_order: payload.order,
+      p_items: payload.items,
+      ...(input.reason ? { p_reason: input.reason } : {}),
+    }),
+  );
+  return getOrderRecord(id);
+}
+
+export interface OrderSummary {
+  active: number;
+  activeTrips: number;
+  completed: number;
+  onHold: number;
+  openValue: number;
+}
+
+/** KPI tiles on the orders page (independent of the table's current page). */
+export async function getOrderSummary(): Promise<OrderSummary> {
+  const list = rows(await sb().from("v_order_list").select("status, trip_count, order_value"));
+  const active = list.filter((o) => o.status === "confirmed" || o.status === "in_progress");
+  return {
+    active: active.length,
+    activeTrips: active.reduce((s, o) => s + num(o.trip_count), 0),
+    completed: list.filter((o) => o.status === "completed").length,
+    onHold: list.filter((o) => o.status === "on_hold").length,
+    openValue: active.reduce((s, o) => s + num(o.order_value), 0),
+  };
 }

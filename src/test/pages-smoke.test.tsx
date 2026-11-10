@@ -1,6 +1,7 @@
 /**
  * Smoke test: renders every page inside the real providers, auth gate and app shell
- * (without the TanStack Start HTML document shell, which jsdom can't host).
+ * (without the TanStack Start HTML document shell, which jsdom can't host), against an
+ * in-memory fake Supabase client with fixture rows.
  * Fails if a page throws, logs a React error, or never leaves its loading state.
  */
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -16,6 +17,9 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { setSupabaseClient } from "@/lib/supabase";
+import { createFakeSupabase } from "./fake-supabase";
+import { EMPLOYEES, ID, ORDER_CODE, TRIP_CODE, fixtureTables } from "./fixtures";
 import { AppShell } from "@/components/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -73,22 +77,24 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  setSupabaseClient(undefined);
+});
 
-const OWNER = {
-  employeeId: "EMP-001",
-  name: "Aarav Mehta",
-  email: "aarav@meridiansupply.in",
-  role: "Owner",
-  designation: "Owner",
-};
-const EMPLOYEE = {
-  employeeId: "EMP-002",
-  name: "Neha Kulkarni",
-  email: "neha@meridiansupply.in",
-  role: "Employee",
-  designation: "Operations Manager",
-};
+/** Signs in as the given user (or nobody) on a fresh fake database. */
+function signInAs(userId: string | null) {
+  const fake = createFakeSupabase({
+    tables: fixtureTables(),
+    userId,
+    functions: {
+      "admin-manage-employee": (body) =>
+        body["action"] === "list" ? { employees: EMPLOYEES } : {},
+    },
+  });
+  setSupabaseClient(fake.client);
+  return fake;
+}
 
 const PAGES: [string, RegExp, () => ReactNode][] = [
   ["/", /Good afternoon/, () => <DashboardPage />],
@@ -103,25 +109,21 @@ const PAGES: [string, RegExp, () => ReactNode][] = [
   ["/whatsapp", /Incoming messages/, () => <WhatsAppPage />],
   ["/orders", /Customer Orders/, () => <OrdersPage />],
   ["/orders/new", /New customer order/, () => <OrderFormPage />],
+  [`/orders/${ID.order}`, /Fulfilment by item/, () => <OrderDetailPage orderId={ID.order} />],
   [
-    "/orders/ORD-2026-0117",
-    /Fulfilment by item/,
-    () => <OrderDetailPage orderId="ORD-2026-0117" />,
-  ],
-  [
-    "/orders/edit/ORD-2026-0117",
-    /Edit ORD-2026-0117/,
-    () => <OrderFormPage orderId="ORD-2026-0117" />,
+    `/orders/edit/${ID.order}`,
+    new RegExp(`Edit ${ORDER_CODE}`),
+    () => <OrderFormPage orderId={ID.order} />,
   ],
   ["/purchases", /Record purchase/, () => <PurchasesPage />],
   [
-    "/purchases/PUR-2026-0146",
+    `/purchases/${ID.purchase}`,
     /Purchase details/,
-    () => <PurchaseDetailPage purchaseId="PUR-2026-0146" />,
+    () => <PurchaseDetailPage purchaseId={ID.purchase} />,
   ],
   ["/trips", /Truck Trips/, () => <TripsPage />],
   ["/trips/new", /Loading weighbridge slip/, () => <TripFormPage />],
-  ["/trips/TRP-2026-00101", /Loading record/, () => <TripDetailPage tripId="TRP-2026-00101" />],
+  [`/trips/${TRIP_CODE}`, /Loading record/, () => <TripDetailPage tripId={TRIP_CODE} />],
   ["/shortages", /Tolerance by material/, () => <ShortagesPage />],
   ["/stock", /Stock Ledger/, () => <StockPage />],
   ["/reconciliation", /Bill Reconciliation/, () => <ReconciliationPage />],
@@ -149,19 +151,31 @@ const PAGES: [string, RegExp, () => ReactNode][] = [
   ["/expenses", /By category/, () => <ExpensesPage />],
   ["/profit", /Month by month/, () => <ProfitPage />],
   ["/customers", /Add customer/, () => <CustomersPage />],
-  ["/customers/CUS-001", /Construction sites/, () => <CustomerDetailPage customerId="CUS-001" />],
+  [
+    `/customers/${ID.customer}`,
+    /Construction sites/,
+    () => <CustomerDetailPage customerId={ID.customer} />,
+  ],
   ["/providers", /Add provider/, () => <ProvidersPage />],
-  ["/providers/PRV-001", /Purchase value/, () => <ProviderDetailPage providerId="PRV-001" />],
+  [
+    `/providers/${ID.provider}`,
+    /Purchase value/,
+    () => <ProviderDetailPage providerId={ID.provider} />,
+  ],
   ["/transporters", /Add transporter/, () => <TransportersPage />],
   [
-    "/transporters/TRN-001",
+    `/transporters/${ID.transporter}`,
     /Trips above tolerance/,
-    () => <TransporterDetailPage transporterId="TRN-001" />,
+    () => <TransporterDetailPage transporterId={ID.transporter} />,
   ],
   ["/vehicles", /Add vehicle/, () => <VehiclesPage />],
-  ["/vehicles/VEH-06", /Trip history/, () => <VehicleDetailPage vehicleId="VEH-06" />],
+  [`/vehicles/${ID.vehicle}`, /Trip history/, () => <VehicleDetailPage vehicleId={ID.vehicle} />],
   ["/materials", /Add material/, () => <MaterialsPage />],
-  ["/materials/MAT-001", /Rate history/, () => <MaterialDetailPage materialId="MAT-001" />],
+  [
+    `/materials/${ID.material}`,
+    /Rate history/,
+    () => <MaterialDetailPage materialId={ID.material} />,
+  ],
   ["/reports", /Open report/, () => <ReportsCatalogPage />],
   ["/reports/order-pl", /Order-wise P&L/, () => <ReportPage reportId="order-pl" />],
   ["/reports/shortage", /Shortage Report/, () => <ReportPage reportId="shortage" />],
@@ -211,7 +225,7 @@ describe("every page renders", () => {
   it.each(PAGES)(
     "%s",
     async (path, expected, element) => {
-      localStorage.setItem("meridian-session", JSON.stringify(OWNER));
+      signInAs(ID.owner);
       const errors: string[] = [];
       const spy = vi.spyOn(console, "error").mockImplementation((...args) => {
         const msg = args.map(String).join(" ");
@@ -230,7 +244,7 @@ describe("every page renders", () => {
   );
 
   it("blocks owner-only pages and hides their menu items for an employee", async () => {
-    localStorage.setItem("meridian-session", JSON.stringify(EMPLOYEE));
+    signInAs(ID.employee);
     renderAt("/settings", () => <SettingsPage />);
     await waitFor(
       () => expect(screen.getByText("You don't have access to this page")).toBeInTheDocument(),
@@ -240,11 +254,37 @@ describe("every page renders", () => {
   }, 15000);
 
   it("shows the login page without a session", async () => {
-    localStorage.removeItem("meridian-session");
+    signInAs(null);
     renderAt("/orders", () => <OrdersPage />);
     await waitFor(
       () => expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument(),
       { timeout: 8000 },
     );
   }, 15000);
+
+  it("locks out an inactive account and says why", async () => {
+    signInAs(ID.inactive);
+    renderAt("/orders", () => <OrdersPage />);
+    await waitFor(() => expect(screen.getByText(/Your account is inactive/)).toBeInTheDocument(), {
+      timeout: 8000,
+    });
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+  }, 15000);
+
+  it("hides actions a restricted employee cannot use, but keeps the ones they can", async () => {
+    signInAs(ID.employee); // view_records + manage_trips only
+    renderAt("/trips", () => <TripsPage />);
+    await waitFor(() => expect(screen.getAllByText(TRIP_CODE).length).toBeGreaterThan(0), {
+      timeout: 8000,
+    });
+    expect(screen.getByRole("link", { name: /Create trip/ })).toBeInTheDocument();
+    cleanup();
+    signInAs(ID.employee);
+    renderAt("/orders", () => <OrdersPage />);
+    await waitFor(() => expect(screen.getAllByText(ORDER_CODE).length).toBeGreaterThan(0), {
+      timeout: 8000,
+    });
+    expect(screen.queryByRole("link", { name: /New order/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Employees & Permissions/ })).toBeNull();
+  }, 20000);
 });

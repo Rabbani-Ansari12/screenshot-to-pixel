@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { Option } from "@/types";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { EmptyState, ExportButtons, TableSkeleton } from "./common";
 import { FilterBar, type DateRangeValue } from "./filter-bar";
 
@@ -67,6 +68,11 @@ export interface DataTableProps<T> {
   caption?: string;
   /** When set, a Table / Grid toggle appears and grid mode renders this card per row. */
   gridItem?: (row: T) => ReactNode;
+  /**
+   * Server mode: `data` is already the current page. Search, filters, date range, sort and
+   * paging are sent to `onQueryChange` (search debounced) and `total` drives the pager.
+   */
+  server?: { total: number; onQueryChange: (query: TableQuery) => void };
 }
 
 const alignCls = (a?: "left" | "right") => (a === "right" ? "text-right" : "text-left");
@@ -94,6 +100,7 @@ export function DataTable<T>({
   initialFilters = {},
   caption,
   gridItem,
+  server,
 }: DataTableProps<T>) {
   const [view, setView] = useState<"table" | "grid">("table");
   const navigate = useNavigate();
@@ -107,6 +114,7 @@ export function DataTable<T>({
   const [pageSize, setPageSize] = useState(initialPageSize);
 
   const filtered = useMemo(() => {
+    if (server) return data ?? [];
     const q = search.trim().toLowerCase();
     let rows = (data ?? []).filter((row) => {
       if (q && searchText && !searchText(row).toLowerCase().includes(q)) return false;
@@ -139,12 +147,38 @@ export function DataTable<T>({
       });
     }
     return rows;
-  }, [data, search, searchText, filters, filterValues, dateValue, range, sort, columns]);
+  }, [server, data, search, searchText, filters, filterValues, dateValue, range, sort, columns]);
 
   useEffect(() => setPage(0), [search, filterValues, range, pageSize]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalCount = server ? server.total : filtered.length;
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const current = Math.min(page, pageCount - 1);
-  const rows = filtered.slice(current * pageSize, current * pageSize + pageSize);
+  const rows = server
+    ? filtered
+    : filtered.slice(current * pageSize, current * pageSize + pageSize);
+  const hasFilters =
+    Boolean(search.trim()) ||
+    Boolean(range.from) ||
+    Object.values(filterValues).some((v) => v !== "all");
+
+  // Server mode: report the query (search debounced so typing doesn't fire a request per key).
+  const [debounced, setDebounced] = useState(search);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const onQueryChange = server?.onQueryChange;
+  useEffect(() => {
+    onQueryChange?.({
+      search: debounced,
+      filters: filterValues,
+      from: range.from,
+      to: range.to,
+      sort,
+      page,
+      pageSize,
+    });
+  }, [onQueryChange, debounced, filterValues, range, sort, page, pageSize]);
 
   const open = (row: T) => {
     if (onRowClick) onRowClick(row);
@@ -220,8 +254,8 @@ export function DataTable<T>({
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={(data ?? []).length ? emptyTitle : "No records yet"}
-          description={(data ?? []).length ? emptyDescription : undefined}
+          title={(server ? hasFilters : (data ?? []).length) ? emptyTitle : "No records yet"}
+          description={(server ? hasFilters : (data ?? []).length) ? emptyDescription : undefined}
         />
       ) : (
         <>
@@ -374,9 +408,9 @@ export function DataTable<T>({
             <p aria-live="polite">
               Showing{" "}
               <span className="font-medium text-foreground">
-                {current * pageSize + 1}–{Math.min(filtered.length, (current + 1) * pageSize)}
+                {current * pageSize + 1}–{Math.min(totalCount, (current + 1) * pageSize)}
               </span>{" "}
-              of <span className="font-medium text-foreground">{filtered.length}</span>
+              of <span className="font-medium text-foreground">{totalCount}</span>
             </p>
             <div className="flex items-center gap-2">
               <span className="hidden sm:inline">Rows</span>

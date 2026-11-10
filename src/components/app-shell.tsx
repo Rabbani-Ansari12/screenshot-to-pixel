@@ -25,8 +25,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -42,11 +40,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useNotifications, useReviewItems, useWhatsAppStatus } from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
 import { formatRelative, initials } from "@/lib/format";
-import { NAV_GROUPS, navItemFor } from "@/lib/navigation";
+import { NAV_GROUPS, navItemFor, usesSampleData } from "@/lib/navigation";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import type { Role } from "@/types";
-import { NoAccess } from "./common";
+import { InfoNote, NoAccess } from "./common";
 import { CommandPalette } from "./command-palette";
 import { UploadDialog } from "./upload-dialog";
 
@@ -289,7 +286,7 @@ function ThemeToggle() {
 }
 
 function UserMenu() {
-  const { user, logout, switchRole, isOwner } = useAuth();
+  const { user, logout, isOwner } = useAuth();
   const navigate = useNavigate();
   if (!user) return null;
   return (
@@ -314,22 +311,11 @@ function UserMenu() {
           <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-          <UserCog className="size-3.5" /> Demo: view as
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={user.role}
-          onValueChange={(v) => {
-            switchRole(v as Role);
-            void navigate({ to: "/" });
-          }}
-        >
-          <DropdownMenuRadioItem value="Owner">Owner (all access)</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="Employee">
-            Employee (Neha · Operations)
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
+        {isOwner && (
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/employees" })}>
+            <UserCog className="size-4" /> Employees & permissions
+          </DropdownMenuItem>
+        )}
         {isOwner && (
           <DropdownMenuItem onSelect={() => void navigate({ to: "/settings" })}>
             <Settings2 className="size-4" /> Settings
@@ -337,8 +323,7 @@ function UserMenu() {
         )}
         <DropdownMenuItem
           onSelect={() => {
-            logout();
-            void navigate({ to: "/login" });
+            void logout().finally(() => navigate({ to: "/login" }));
           }}
         >
           <LogOut className="size-4" /> Log out
@@ -464,6 +449,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           id="main"
           className="mx-auto w-full max-w-[1480px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-12"
         >
+          {allowed && usesSampleData(pathname) && (
+            <InfoNote tone="warning" className="mb-4">
+              This page still shows sample data. It will switch to your live records when this
+              module is connected.
+            </InfoNote>
+          )}
           {allowed ? children : <NoAccess />}
         </main>
       </div>

@@ -27,7 +27,8 @@ import { DetailSkeleton, InfoNote, SectionCard } from "@/components/common";
 import { EntityPicker } from "@/components/entity-picker";
 import { PageHeader } from "@/components/page-header";
 import { api, useAction, useMasterOptions, useOrderRecord } from "@/hooks/queries";
-import { DEMO_TODAY, formatINR } from "@/lib/format";
+import { formatINR, todayIST } from "@/lib/format";
+import { unitMismatchMessage } from "@/services/supabase/mappers";
 import { ORDER_STATUSES } from "./orders-page";
 
 const UNITS: Unit[] = ["MT", "CFT", "Brass", "m³", "Trips", "Bags", "Nos"];
@@ -41,6 +42,7 @@ const schema = z
     expectedDelivery: z.string().min(1, "Required"),
     status: z.enum(["Draft", "Confirmed", "In Progress", "Completed", "On Hold", "Cancelled"]),
     notes: z.string(),
+    reason: z.string(),
     items: z
       .array(
         z.object({
@@ -62,16 +64,17 @@ const schema = z
   });
 type Values = z.infer<typeof schema>;
 
-const empty: Values = {
+const emptyValues = (): Values => ({
   customerId: "",
   siteId: "",
-  orderDate: DEMO_TODAY,
+  orderDate: todayIST(),
   customerRef: "",
-  expectedDelivery: DEMO_TODAY,
+  expectedDelivery: todayIST(),
   status: "Confirmed",
   notes: "",
+  reason: "",
   items: [{ materialId: "", quantity: Number.NaN, unit: "MT", sellingRate: Number.NaN }],
-};
+});
 
 function toValues(o: Order): Values {
   return {
@@ -82,6 +85,7 @@ function toValues(o: Order): Values {
     expectedDelivery: o.expectedDelivery,
     status: o.status,
     notes: o.notes,
+    reason: "",
     items: o.items.map(({ materialId, quantity, unit, sellingRate }) => ({
       materialId,
       quantity,
@@ -96,11 +100,11 @@ export function OrderFormPage({ orderId }: { orderId?: string }) {
   const { data: options } = useMasterOptions();
   const { data: existing, isLoading } = useOrderRecord(orderId ?? "");
   const navigate = useNavigate();
-  const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: empty });
+  const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: emptyValues() });
   const items = useFieldArray({ control: form.control, name: "items" });
   const create = useAction(api.orders.createOrder, (o) => `Order ${o.ref} created`);
   const update = useAction(
-    (v: Values) => api.orders.updateOrder(orderId ?? "", v),
+    (v: Values) => api.orders.updateOrder(orderId ?? "", { ...v, reason: v.reason.trim() }),
     "Order updated · change recorded in audit history",
   );
 
@@ -127,7 +131,39 @@ export function OrderFormPage({ orderId }: { orderId?: string }) {
 
   if (editing && (isLoading || !existing)) return <DetailSkeleton />;
 
+  const quantitiesChanged = (v: Values) =>
+    Boolean(existing) &&
+    (existing?.items ?? []).some((old) => {
+      const now = v.items.find((i) => i.materialId === old.materialId);
+      return !now || now.quantity !== old.quantity || now.sellingRate !== old.sellingRate;
+    });
+
   const onSubmit = async (v: Values) => {
+    // Units must be the material's own unit: no MT <-> volume conversion, ever.
+    let blocked = false;
+    const seen = new Set<string>();
+    v.items.forEach((item, i) => {
+      const m = materials.find((x) => x.id === item.materialId);
+      const mismatch = m ? unitMismatchMessage(m.unit, item.unit, m.name) : null;
+      if (mismatch) {
+        form.setError(`items.${i}.unit`, { message: mismatch });
+        blocked = true;
+      }
+      if (seen.has(item.materialId)) {
+        form.setError(`items.${i}.materialId`, {
+          message: "This material is already in the order. Change that line instead.",
+        });
+        blocked = true;
+      }
+      seen.add(item.materialId);
+    });
+    if (editing && quantitiesChanged(v) && v.reason.trim().length < 3) {
+      form.setError("reason", {
+        message: "Give a reason for changing ordered quantities or rates (kept in audit history).",
+      });
+      blocked = true;
+    }
+    if (blocked) return;
     const saved = editing ? await update.mutateAsync(v) : await create.mutateAsync(v);
     void navigate({ to: "/orders/$orderId", params: { orderId: saved.id } });
   };
@@ -135,8 +171,8 @@ export function OrderFormPage({ orderId }: { orderId?: string }) {
   return (
     <>
       <PageHeader
-        title={editing ? `Edit ${orderId}` : "New customer order"}
-        crumbs={[{ label: editing ? `Edit ${orderId}` : "New" }]}
+        title={editing ? `Edit ${existing?.ref ?? ""}` : "New customer order"}
+        crumbs={[{ label: editing ? `Edit ${existing?.ref ?? ""}` : "New" }]}
         description="Trips, purchases and invoices will link to this order automatically as documents arrive."
       />
       <Form {...form}>
@@ -390,11 +426,24 @@ export function OrderFormPage({ orderId }: { orderId?: string }) {
                       </FormItem>
                     )}
                   />
+                  {(() => {
+                    const item = watchedItems[index];
+                    const m = materials.find((x) => x.id === item?.materialId);
+                    const msg = m && item ? unitMismatchMessage(m.unit, item.unit, m.name) : null;
+                    return msg ? (
+                      <p
+                        role="alert"
+                        className="text-sm text-destructive sm:col-span-2 lg:col-span-5 lg:row-start-2"
+                      >
+                        {msg}
+                      </p>
+                    ) : null;
+                  })()}
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="justify-self-end"
+                    className="justify-self-end lg:row-start-1 lg:col-start-5"
                     onClick={() => items.remove(index)}
                     disabled={items.fields.length === 1}
                     aria-label={`Remove item ${index + 1}`}
@@ -420,6 +469,27 @@ export function OrderFormPage({ orderId }: { orderId?: string }) {
               conversion.
             </InfoNote>
           </SectionCard>
+
+          {editing && (
+            <SectionCard
+              title="Reason for change"
+              description="Needed when you change an ordered quantity or rate. Saved in Audit History."
+            >
+              <FormField
+                control={form.control}
+                name="reason"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="sr-only">Reason for change</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Customer revised PO to 120 MT" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SectionCard>
+          )}
 
           <SectionCard title="Notes">
             <FormField

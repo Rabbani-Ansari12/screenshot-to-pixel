@@ -8,16 +8,42 @@
  *   npx tsx scripts/supabase-api.ts seed              # run supabase/seed.sql (idempotent)
  *   npx tsx scripts/supabase-api.ts test              # run supabase/tests/database/*.test.sql (rolled back)
  *   npx tsx scripts/supabase-api.ts query "select 1"  # ad-hoc SQL
+ *   npx tsx scripts/supabase-api.ts types             # regenerate src/types/database.ts
  *
- * Needs SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_REF in the environment. Never prints the token.
+ * Reads SUPABASE_ACCESS_TOKEN (and optionally SUPABASE_PROJECT_REF) from the environment or from
+ * supabase/.env (gitignored); the project ref falls back to the linked project. Never prints the token.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const token = process.env["SUPABASE_ACCESS_TOKEN"];
-const ref = process.env["SUPABASE_PROJECT_REF"];
+function envFile(path: string): Record<string, string> {
+  if (!existsSync(path)) return {};
+  return Object.fromEntries(
+    readFileSync(path, "utf8")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith("#") && l.includes("="))
+      .map((l) => [
+        l.slice(0, l.indexOf("=")).trim(),
+        l
+          .slice(l.indexOf("=") + 1)
+          .trim()
+          .replace(/^["']|["']$/g, ""),
+      ]),
+  );
+}
+const fileEnv = envFile("supabase/.env");
+const token = process.env["SUPABASE_ACCESS_TOKEN"] ?? fileEnv["SUPABASE_ACCESS_TOKEN"];
+const ref =
+  process.env["SUPABASE_PROJECT_REF"] ??
+  fileEnv["SUPABASE_PROJECT_REF"] ??
+  (existsSync("supabase/.temp/project-ref")
+    ? readFileSync("supabase/.temp/project-ref", "utf8").trim()
+    : undefined);
 if (!token || !ref) {
-  console.error("Set SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_REF first.");
+  console.error(
+    "Set SUPABASE_ACCESS_TOKEN (environment or supabase/.env) and link the project first.",
+  );
   process.exit(1);
 }
 
@@ -128,6 +154,19 @@ async function test() {
   process.exit(failed ? 1 : 0);
 }
 
+/** Same output as `supabase gen types typescript --linked`, fetched over HTTPS. */
+async function types() {
+  const res = await fetch(
+    `https://api.supabase.com/v1/projects/${ref}/types/typescript?included_schemas=public`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  const text = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${text}`);
+  const body = JSON.parse(text) as { types: string };
+  writeFileSync("src/types/database.ts", body.types);
+  console.log("wrote src/types/database.ts");
+}
+
 const [cmd, arg] = process.argv.slice(2);
 const run = async () => {
   if (cmd === "status") return status();
@@ -136,7 +175,8 @@ const run = async () => {
     return query(readFileSync("supabase/seed.sql", "utf8")).then(() => console.log("seed applied"));
   if (cmd === "test") return test();
   if (cmd === "query" && arg) return console.log(JSON.stringify(await query(arg), null, 2));
-  console.error("Usage: status | migrate | seed | test | query <sql>");
+  if (cmd === "types") return types();
+  console.error("Usage: status | migrate | seed | test | query <sql> | types");
   process.exit(1);
 };
 run().catch((e) => {

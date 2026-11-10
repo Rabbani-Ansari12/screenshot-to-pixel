@@ -18,7 +18,8 @@
     "db:test": "supabase test db --linked",
     "create-owner": "tsx scripts/create-owner.ts",
     "db:seed:generate": "tsx scripts/generate-seed.ts",
-    "db:api": "tsx scripts/supabase-api.ts"
+    "db:api": "tsx scripts/supabase-api.ts",
+    "test:e2e": "playwright test"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -80,6 +81,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.56.1",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^22.16.5",

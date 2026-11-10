@@ -41,7 +41,7 @@ import {
 import { ChartBox, ChartTooltip, axisProps, gridProps, series } from "@/components/charts";
 import { EntityPicker } from "@/components/entity-picker";
 import { api, useAction, useMasterOptions, useRateHistory } from "@/hooks/queries";
-import { DEMO_TODAY, formatDate, formatINR } from "@/lib/format";
+import { formatDate, formatINR, todayIST } from "@/lib/format";
 import { Label } from "@/components/ui/label";
 
 const schema = z
@@ -158,7 +158,7 @@ export function PurchaseFormSheet({
       providerId: "",
       materialId: "",
       orderId: "",
-      date: DEMO_TODAY,
+      date: todayIST(),
       quantity: Number.NaN,
       rate: Number.NaN,
       deliveryMode: "Direct-to-Site",

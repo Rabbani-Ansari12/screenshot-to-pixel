@@ -1,55 +1,67 @@
-import type { AppNotification, AppSettings, AuditEvent, Employee, Permission } from "@/types";
-import { permissionLabel } from "@/lib/permissions";
-import { DEMO_TODAY } from "@/lib/format";
-import { NotFoundError, clone, db, delay, logAudit, nextId } from "./core";
-import { toBillView, toInvoiceView } from "./views";
+/**
+ * Employees (through the owner-only `admin-manage-employee` Edge Function), audit history,
+ * app settings and exception notifications — all from Supabase.
+ */
+import type {
+  AppNotification,
+  AppSettings,
+  AuditAction,
+  AuditChange,
+  AuditEvent,
+  Employee,
+  Permission,
+} from "@/types";
+import type { Json, Tables } from "@/lib/supabase";
+import { AppError, check, rows, toAppError, unwrapMaybe } from "./supabase/errors";
+import { sb } from "./supabase/fetch";
+import { unitFromDb, unitToDb } from "./supabase/mappers";
 
-// TODO(backend): supabase.from("employees").select("*") — permissions live in a role_permissions table.
+// ---------- Employees ----------
+type SignInMethod = "invite" | "temp_password" | "magic_link";
+
+async function callAdmin<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await sb().functions.invoke("admin-manage-employee", { body });
+  if (error) {
+    // FunctionsHttpError carries the JSON body with a readable message.
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === "function") {
+      const payload = (await ctx.json().catch(() => null)) as { error?: string } | null;
+      if (payload?.error)
+        throw new AppError(payload.error, null, ctx.status === 403 ? "forbidden" : "invalid");
+    }
+    throw toAppError(error);
+  }
+  return data as T;
+}
+
 export async function listEmployees(): Promise<Employee[]> {
-  await delay(150);
-  return clone(db.employees);
+  const { employees } = await callAdmin<{ employees: Employee[] }>({ action: "list" });
+  return employees;
+}
+
+async function employeeById(id: string): Promise<Employee> {
+  const found = (await listEmployees()).find((e) => e.id === id);
+  if (!found) throw new AppError("Employee not found.", null, "not_found");
+  return found;
 }
 
 export async function createEmployee(
-  input: Pick<Employee, "name" | "email" | "phone" | "designation" | "permissions">,
+  input: Pick<Employee, "name" | "email" | "phone" | "designation" | "permissions"> & {
+    method?: SignInMethod;
+    password?: string;
+  },
 ): Promise<Employee> {
-  await delay(400);
-  const employee: Employee = {
+  const { id } = await callAdmin<{ id: string }>({
+    action: "create",
     ...input,
-    id: nextId("EMP-", db.employees, 3),
-    role: "Employee",
-    active: true,
-    lastActiveAt: "",
-    joinedAt: DEMO_TODAY,
-  };
-  db.employees.push(employee);
-  logAudit({
-    action: "Created",
-    entityType: "Employee",
-    entityId: employee.id,
-    entityLabel: employee.name,
-    changes: [
-      { field: "Permissions", from: "—", to: input.permissions.map(permissionLabel).join(", ") },
-    ],
+    method: input.method ?? "invite",
   });
-  return clone(employee);
+  return employeeById(id);
 }
 
 export async function setEmployeeActive(id: string, active: boolean): Promise<Employee> {
-  await delay(300);
-  const e = db.employees.find((x) => x.id === id);
-  if (!e) throw new NotFoundError(`Employee ${id}`);
-  e.active = active;
-  logAudit({
-    action: active ? "Updated" : "Deactivated",
-    entityType: "Employee",
-    entityId: id,
-    entityLabel: e.name,
-    changes: [
-      { field: "Status", from: active ? "Inactive" : "Active", to: active ? "Active" : "Inactive" },
-    ],
-  });
-  return clone(e);
+  await callAdmin({ action: "set_active", profileId: id, active });
+  return employeeById(id);
 }
 
 export async function setPermission(
@@ -57,130 +69,327 @@ export async function setPermission(
   permission: Permission,
   enabled: boolean,
 ): Promise<Employee> {
-  await delay(200);
-  const e = db.employees.find((x) => x.id === id);
-  if (!e) throw new NotFoundError(`Employee ${id}`);
-  e.permissions = enabled
-    ? [...new Set([...e.permissions, permission])]
-    : e.permissions.filter((p) => p !== permission);
-  logAudit({
-    action: "Permission changed",
-    entityType: "Employee",
-    entityId: id,
-    entityLabel: e.name,
-    changes: [
-      {
-        field: permissionLabel(permission),
-        from: enabled ? "Off" : "On",
-        to: enabled ? "On" : "Off",
-      },
-    ],
-  });
-  return clone(e);
+  const current = await employeeById(id);
+  const permissions = enabled
+    ? [...new Set([...current.permissions, permission])]
+    : current.permissions.filter((p) => p !== permission);
+  await callAdmin({ action: "set_permissions", profileId: id, permissions });
+  return { ...current, permissions };
 }
 
-// TODO(backend): supabase.from("audit_log").select("*").order("at", { ascending: false }) — read-only, no update/delete policy.
+export async function resetEmployeePassword(
+  id: string,
+  method: "email" | "temp_password",
+  password?: string,
+): Promise<{ method: "email" | "temp_password" }> {
+  return callAdmin({ action: "reset_password", profileId: id, method, password });
+}
+
+// ---------- Audit history ----------
+const TABLE_LABEL: Record<string, string> = {
+  customer_orders: "Order",
+  order_items: "Order item",
+  purchases: "Purchase",
+  purchase_items: "Purchase item",
+  truck_trips: "Trip",
+  weight_records: "Weight record",
+  delivery_records: "Delivery",
+  stock_movements: "Stock",
+  stock_locations: "Yard",
+  customers: "Customer",
+  construction_sites: "Site",
+  materials: "Material",
+  material_rates: "Material rate",
+  material_providers: "Provider",
+  provider_materials: "Provider material",
+  transporters: "Transporter",
+  drivers: "Driver",
+  vehicles: "Vehicle",
+  user_permissions: "Permission",
+  profiles: "User",
+  employees: "Employee",
+  app_settings: "Settings",
+  documents: "Document",
+  ai_processing_records: "AI reading",
+  provider_bills: "Provider bill",
+  provider_bill_items: "Provider bill line",
+  transporter_bills: "Transporter bill",
+  transporter_bill_trips: "Transporter bill trip",
+  reconciliation_records: "Reconciliation",
+  customer_invoices: "Invoice",
+  invoice_items: "Invoice item",
+  payments: "Payment",
+  expenses: "Expense",
+};
+const IGNORED = new Set([
+  "updated_at",
+  "updated_by",
+  "created_at",
+  "created_by",
+  "business_id",
+  "id",
+]);
+const LABEL_KEYS = [
+  "trip_code",
+  "order_code",
+  "purchase_code",
+  "payment_code",
+  "invoice_number",
+  "bill_number",
+  "vehicle_number",
+  "name",
+  "full_name",
+  "permission",
+  "slip_number",
+];
+
+const humanize = (k: string) =>
+  k
+    .replace(/_id$/, "")
+    .replace(/_/g, " ")
+    .replace(/^./, (c) => c.toUpperCase());
+const show = (v: unknown) =>
+  v === null || v === undefined
+    ? "—"
+    : typeof v === "object"
+      ? JSON.stringify(v).slice(0, 60)
+      : String(v);
+
+type AuditRow = Tables<"audit_logs">;
+const obj = (j: Json | null) =>
+  j && typeof j === "object" && !Array.isArray(j) ? (j as Record<string, Json>) : {};
+
+export function toAuditEvent(r: AuditRow, names: Map<string, string>): AuditEvent {
+  const before = obj(r.old_data);
+  const after = obj(r.new_data);
+  const data = Object.keys(after).length ? after : before;
+  const changes: AuditChange[] =
+    r.action === "UPDATE"
+      ? Object.keys(after)
+          .filter((k) => !IGNORED.has(k) && JSON.stringify(before[k]) !== JSON.stringify(after[k]))
+          .map((k) => ({ field: humanize(k), from: show(before[k]), to: show(after[k]) }))
+      : [];
+  let action: AuditAction;
+  if (r.table_name === "user_permissions") action = "Permission changed";
+  else if (r.action === "INSERT") action = "Created";
+  else if (r.action === "DELETE") action = "Deleted";
+  else if (r.reason) action = "Corrected";
+  else if ("is_active" in after && after["is_active"] === false && before["is_active"] === true)
+    action = "Deactivated";
+  else action = "Updated";
+  const label = LABEL_KEYS.map((k) => data[k]).find((v) => typeof v === "string" && v) as
+    string | undefined;
+  return {
+    id: r.id,
+    at: r.changed_at,
+    userName: r.changed_by ? (names.get(r.changed_by) ?? "Former user") : "System",
+    action,
+    entityType: TABLE_LABEL[r.table_name] ?? humanize(r.table_name),
+    entityId: r.record_id ?? "",
+    entityLabel: label ?? TABLE_LABEL[r.table_name] ?? r.table_name,
+    changes:
+      r.table_name === "user_permissions"
+        ? [
+            {
+              field: humanize(String(data["permission"] ?? "permission")),
+              from: r.action === "INSERT" ? "Off" : "On",
+              to: r.action === "INSERT" ? "On" : "Off",
+            },
+          ]
+        : changes,
+    note: r.reason ?? "",
+    ...(r.reason ? { reason: r.reason } : {}),
+  };
+}
+
+async function profileNames(): Promise<Map<string, string>> {
+  const list = rows(await sb().from("profiles").select("id, full_name, email"));
+  return new Map(list.map((p) => [p.id, p.full_name || p.email || "User"]));
+}
+
+/** Latest 1000 changes (owner only — RLS returns nothing for employees). */
 export async function listAuditEvents(): Promise<AuditEvent[]> {
-  await delay();
-  return clone(db.auditEvents);
+  const [logs, names] = await Promise.all([
+    sb().from("audit_logs").select("*").order("changed_at", { ascending: false }).limit(1000),
+    profileNames(),
+  ]);
+  return rows(logs).map((r) => toAuditEvent(r, names));
+}
+
+/** Audit entries for specific records (detail page activity panels). */
+export async function listEntityAudit(recordIds: string[], limit = 25): Promise<AuditEvent[]> {
+  const ids = recordIds.filter(Boolean);
+  if (!ids.length) return [];
+  const [logs, names] = await Promise.all([
+    sb()
+      .from("audit_logs")
+      .select("*")
+      .in("record_id", ids)
+      .order("changed_at", { ascending: false })
+      .limit(limit),
+    profileNames(),
+  ]);
+  return rows(logs).map((r) => toAuditEvent(r, names));
+}
+
+// ---------- Settings ----------
+type SettingsRow = Tables<"app_settings">;
+
+const formatFor = (width: number) => `{PREFIX}-{YYYY}-{SEQ:${width}}`;
+const widthOf = (format: string) => {
+  const m = /\{SEQ:(\d)\}/.exec(format);
+  return m ? Math.min(8, Math.max(3, Number(m[1]))) : 4;
+};
+
+export function toAppSettings(
+  row: SettingsRow,
+  business: Tables<"businesses"> | null,
+): AppSettings {
+  const gst = obj(row.gst_config);
+  const profile = obj(row.business_profile);
+  const notif = obj(row.notification_preferences);
+  const flag = (k: string, d: boolean) =>
+    typeof notif[k] === "boolean" ? (notif[k] as boolean) : d;
+  return {
+    business: {
+      name: business?.name ?? "",
+      legalName: business?.legal_name ?? "",
+      address: String(profile["address"] ?? ""),
+      phone: String(profile["phone"] ?? ""),
+      email: String(profile["email"] ?? ""),
+    },
+    gst: {
+      gstin: String(gst["gstin"] ?? business?.gstin ?? ""),
+      pan: String(gst["pan"] ?? ""),
+      stateCode: String(gst["state_code"] ?? ""),
+      defaultMode: gst["default_mode"] === "igst" ? "IGST" : "CGST+SGST",
+      defaultRate: Number(gst["default_rate"] ?? 5),
+    },
+    invoiceNumbering: {
+      prefix: row.invoice_prefix,
+      format: formatFor(row.invoice_number_width),
+      nextNumber: row.next_invoice_number,
+    },
+    autoProcessThreshold: Math.round(Number(row.auto_process_confidence_threshold) * 100),
+    authoritativeWeight: row.authoritative_weight === "loading" ? "Loading" : "Delivery",
+    enabledUnits: row.enabled_units.map(unitFromDb),
+    // WhatsApp and backups are not configured from the database yet.
+    whatsapp: { connected: false, provider: "Twilio WhatsApp", number: "", lastMessageAt: "" },
+    notifications: {
+      reviewQueue: flag("review_queue", true),
+      shortages: flag("shortages", true),
+      billMismatch: flag("bill_mismatch", true),
+      overduePayments: flag("overdue_payments", true),
+      failedDocuments: flag("failed_documents", true),
+      dailySummary: flag("daily_summary", false),
+    },
+    backup: {
+      lastBackupAt: "",
+      destination: "Supabase managed daily backups",
+      status: "Healthy",
+      sizeMb: 0,
+    },
+  };
+}
+
+async function settingsRow() {
+  const row = unwrapMaybe(await sb().from("app_settings").select("*").maybeSingle());
+  if (!row)
+    throw new AppError("Settings are not set up yet. Run npm run create-owner.", null, "not_found");
+  return row;
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  await delay(150);
-  return clone(db.settings);
+  const [row, business] = await Promise.all([
+    settingsRow(),
+    sb().from("businesses").select("*").maybeSingle(),
+  ]);
+  return toAppSettings(row, unwrapMaybe(business));
 }
 
+/** Owner only (RLS). Only the fields present in the patch are written. */
 export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-  await delay(400);
-  const before = clone(db.settings);
-  Object.assign(db.settings, patch);
-  const changes = (Object.keys(patch) as (keyof AppSettings)[]).map((k) => ({
-    field: k,
-    from: JSON.stringify(before[k]).slice(0, 60),
-    to: JSON.stringify(db.settings[k]).slice(0, 60),
-  }));
-  logAudit({
-    action: "Updated",
-    entityType: "Settings",
-    entityId: "SETTINGS",
-    entityLabel: "Settings",
-    changes,
-  });
-  return clone(db.settings);
+  const row = await settingsRow();
+  const update: Partial<SettingsRow> = {};
+  if (patch.invoiceNumbering) {
+    update.invoice_prefix = patch.invoiceNumbering.prefix;
+    update.next_invoice_number = patch.invoiceNumbering.nextNumber;
+    update.invoice_number_width = widthOf(patch.invoiceNumbering.format);
+  }
+  if (patch.gst)
+    update.gst_config = {
+      gstin: patch.gst.gstin || null,
+      pan: patch.gst.pan || null,
+      state_code: patch.gst.stateCode,
+      default_mode: patch.gst.defaultMode === "IGST" ? "igst" : "cgst_sgst",
+      default_rate: patch.gst.defaultRate,
+    };
+  if (patch.business)
+    update.business_profile = {
+      ...obj(row.business_profile),
+      address: patch.business.address,
+      phone: patch.business.phone,
+      email: patch.business.email,
+    };
+  if (patch.autoProcessThreshold !== undefined)
+    update.auto_process_confidence_threshold = Math.round(patch.autoProcessThreshold) / 100;
+  if (patch.authoritativeWeight)
+    update.authoritative_weight = patch.authoritativeWeight === "Loading" ? "loading" : "delivery";
+  if (patch.enabledUnits)
+    update.enabled_units = patch.enabledUnits.map((u) => unitToDb(u as never));
+  if (patch.notifications)
+    update.notification_preferences = {
+      review_queue: patch.notifications.reviewQueue,
+      shortages: patch.notifications.shortages,
+      bill_mismatch: patch.notifications.billMismatch,
+      overdue_payments: patch.notifications.overduePayments,
+      failed_documents: patch.notifications.failedDocuments,
+      daily_summary: patch.notifications.dailySummary,
+    };
+  if (Object.keys(update).length)
+    check(await sb().from("app_settings").update(update).eq("id", row.id).select("id").single());
+  if (patch.business || patch.gst) {
+    const businessPatch: Partial<Tables<"businesses">> = {};
+    if (patch.business) {
+      businessPatch.name = patch.business.name;
+      businessPatch.legal_name = patch.business.legalName || null;
+    }
+    if (patch.gst) businessPatch.gstin = patch.gst.gstin || null;
+    check(
+      await sb()
+        .from("businesses")
+        .update(businessPatch)
+        .eq("id", row.business_id)
+        .select("id")
+        .single(),
+    );
+  }
+  return getSettings();
 }
 
-/** Exceptions only — never routine events. */
+// ---------- Notifications (exceptions only) ----------
 export async function listNotifications(): Promise<AppNotification[]> {
-  await delay(150);
-  const n: AppNotification[] = [];
-  db.reviewItems
-    .filter((r) => r.status === "Open")
-    .forEach((r) =>
-      n.push({
-        id: `N-${r.id}`,
-        at: r.createdAt,
-        title: r.title,
-        detail: `${r.reason} · ${r.id}`,
-        href: `/review/${r.id}`,
-        severity: r.priority === "High" ? "danger" : "warning",
-        read: false,
-      }),
-    );
-  db.trips
-    .filter((t) => t.status === "Needs Verification")
-    .slice(-4)
-    .forEach((t) =>
-      n.push({
-        id: `N-${t.id}`,
-        at: t.delivery?.at ?? t.loading.at,
-        title: "Delivery difference above tolerance",
-        detail: `${t.id} needs verification`,
-        href: `/shortages`,
-        severity: "warning",
-        read: false,
-      }),
-    );
-  db.bills
-    .map(toBillView)
-    .filter((b) => b.reconStatus === "Mismatch")
-    .forEach((b) =>
-      n.push({
-        id: `N-${b.id}`,
-        at: `${b.date}T12:00:00+05:30`,
-        title: `${b.partyName} bill mismatch`,
-        detail: `${b.billNo} differs by ₹${Math.abs(b.difference).toLocaleString("en-IN")}`,
-        href: `/reconciliation/${b.id}`,
-        severity: "danger",
-        read: false,
-      }),
-    );
-  db.documents
-    .filter((d) => d.status === "Failed")
-    .forEach((d) =>
-      n.push({
-        id: `N-${d.id}`,
-        at: d.receivedAt,
-        title: "Document could not be read",
-        detail: `${d.id} · ${d.senderName}`,
-        href: `/documents/${d.id}`,
-        severity: "danger",
-        read: true,
-      }),
-    );
-  db.invoices
-    .map(toInvoiceView)
-    .filter((i) => i.overdueDays > 20)
-    .slice(0, 3)
-    .forEach((i) =>
-      n.push({
-        id: `N-${i.id}`,
-        at: `${i.dueDate}T09:00:00+05:30`,
-        title: `Invoice overdue ${i.overdueDays} days`,
-        detail: `${i.number} · ${i.customerName}`,
-        href: `/invoices/${i.id}`,
-        severity: "warning",
-        read: true,
-      }),
-    );
-  return clone(n.sort((a, b) => b.at.localeCompare(a.at)));
+  const trips = rows(
+    await sb()
+      .from("v_trip_list")
+      .select(
+        "trip_code, status, delivered_at, loaded_at, vehicle_number, site_name, investigation_outcome",
+      )
+      .in("status", ["needs_verification", "confirmed_shortage"])
+      .is("investigation_outcome", null)
+      .order("sort_at", { ascending: false })
+      .limit(10),
+  );
+  return trips.map((t) => ({
+    id: `N-${t.trip_code ?? ""}`,
+    at: t.delivered_at ?? t.loaded_at ?? new Date().toISOString(),
+    title:
+      t.status === "confirmed_shortage"
+        ? "Delivery difference above 2× tolerance"
+        : "Delivery difference above tolerance",
+    detail: `${t.trip_code ?? ""} · ${t.vehicle_number ?? ""} · ${t.site_name ?? ""}`,
+    href: "/shortages",
+    severity: t.status === "confirmed_shortage" ? "danger" : "warning",
+    read: false,
+  }));
 }

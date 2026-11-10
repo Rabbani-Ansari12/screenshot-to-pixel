@@ -17,6 +17,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as ProfitRouteImport } from './routes/profit'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShortagesRouteImport } from './routes/shortages'
 import { Route as StockRouteImport } from './routes/stock'
@@ -93,6 +94,11 @@ const PaymentsRoute = PaymentsRouteImport.update({
 const ProfitRoute = ProfitRouteImport.update({
   id: '/profit',
   path: '/profit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -291,6 +297,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
   '/profit': typeof ProfitRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
@@ -338,6 +345,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
   '/profit': typeof ProfitRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
@@ -386,6 +394,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/payments': typeof PaymentsRoute
   '/profit': typeof ProfitRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
@@ -435,6 +444,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/payments'
     | '/profit'
+    | '/reset-password'
     | '/settings'
     | '/shortages'
     | '/stock'
@@ -482,6 +492,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/payments'
     | '/profit'
+    | '/reset-password'
     | '/settings'
     | '/shortages'
     | '/stock'
@@ -529,6 +540,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/payments'
     | '/profit'
+    | '/reset-password'
     | '/settings'
     | '/shortages'
     | '/stock'
@@ -577,6 +589,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PaymentsRoute: typeof PaymentsRoute
   ProfitRoute: typeof ProfitRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   SettingsRoute: typeof SettingsRoute
   ShortagesRoute: typeof ShortagesRoute
   StockRoute: typeof StockRoute
@@ -672,6 +685,13 @@ declare module '@tanstack/react-router' {
       path: '/profit'
       fullPath: '/profit'
       preLoaderRoute: typeof ProfitRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -945,6 +965,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PaymentsRoute: PaymentsRoute,
   ProfitRoute: ProfitRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SettingsRoute: SettingsRoute,
   ShortagesRoute: ShortagesRoute,
   StockRoute: StockRoute,

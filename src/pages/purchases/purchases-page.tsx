@@ -1,21 +1,24 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DataTable, optionsFrom } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { DetailList, DetailSkeleton, ErrorState, InfoNote, SectionCard } from "@/components/common";
 import { DocumentThumbnail } from "@/components/document-viewer";
 import { PageHeader } from "@/components/page-header";
 import { purchaseColumns, tripColumns } from "@/components/record-columns";
 import { SimpleTable } from "@/components/simple-table";
 import { StatusBadge } from "@/components/status-badge";
-import { usePurchase, usePurchases } from "@/hooks/queries";
+import { useMasterOptions, usePurchase, usePurchasesPage } from "@/hooks/queries";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { useAuth } from "@/lib/auth";
 import { formatDate, formatINR, formatQty } from "@/lib/format";
 import { Link } from "@tanstack/react-router";
 import { PurchaseFormSheet, RateHistoryChart } from "./purchase-form";
 
 export function PurchasesPage() {
-  const { data, isLoading, error } = usePurchases();
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = usePurchasesPage(query);
+  const { data: options } = useMasterOptions();
   const { can } = useAuth();
   const [open, setOpen] = useState(false);
   if (error) return <ErrorState error={error} />;
@@ -33,8 +36,9 @@ export function PurchasesPage() {
         }
       />
       <DataTable
-        data={data}
-        isLoading={isLoading}
+        data={data?.rows}
+        isLoading={isLoading || !query}
+        server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
         columns={purchaseColumns()}
         getRowId={(p) => p.id}
         rowHref={(p) => `/purchases/${p.id}`}
@@ -46,14 +50,14 @@ export function PurchasesPage() {
           {
             id: "provider",
             label: "Providers",
-            options: optionsFrom(data?.map((p) => p.providerName) ?? []),
-            value: (p) => p.providerName,
+            options: (options?.providers ?? []).map((x) => ({ value: x.id, label: x.name })),
+            value: (p) => p.providerId,
           },
           {
             id: "material",
             label: "Materials",
-            options: optionsFrom(data?.map((p) => p.materialName) ?? []),
-            value: (p) => p.materialName,
+            options: (options?.materials ?? []).map((x) => ({ value: x.id, label: x.name })),
+            value: (p) => p.materialId,
           },
           {
             id: "mode",
@@ -67,7 +71,10 @@ export function PurchasesPage() {
           {
             id: "status",
             label: "Statuses",
-            options: optionsFrom(data?.map((p) => p.status) ?? []),
+            options: ["Recorded", "Needs Verification", "Billed", "Cancelled"].map((v) => ({
+              value: v,
+              label: v,
+            })),
             value: (p) => p.status,
           },
         ]}

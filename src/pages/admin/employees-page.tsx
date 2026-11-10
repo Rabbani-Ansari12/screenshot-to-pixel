@@ -1,59 +1,91 @@
 import { useState } from "react";
 import { z } from "zod";
-import { Info, Plus, UserCheck, UserX } from "lucide-react";
+import { KeyRound, Plus, UserCheck, UserX } from "lucide-react";
 import type { Employee } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { ErrorState, InfoNote, PageSkeleton, SectionCard } from "@/components/common";
+import { ErrorState, PageSkeleton, SectionCard } from "@/components/common";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/page-header";
 import { QuickAddDialog } from "@/components/quick-add-dialog";
 import { StatusBadge } from "@/components/status-badge";
-import { api, useAction, useEmployees } from "@/hooks/queries";
+import { api, useAction, useEmployees, useSetPermission } from "@/hooks/queries";
+import { useAuth } from "@/lib/auth";
 import { formatRelative, initials } from "@/lib/format";
 import { PERMISSION_INFO } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
-const schema = z.object({
-  name: z.string().min(2, "Required"),
-  email: z.string().email("Enter a valid email"),
-  phone: z.string().regex(/^\+?[\d\s]{10,15}$/, "Enter a valid phone"),
-  designation: z.string().min(2, "Required"),
-  permissions: z
-    .array(
-      z.enum([
-        "view_records",
-        "manage_orders",
-        "review_documents",
-        "manage_trips",
-        "correct_extracted",
-        "verify_bills",
-        "record_payments",
-        "view_financial_reports",
-      ]),
-    )
-    .min(1, "Give at least one permission"),
-});
+const schema = z
+  .object({
+    name: z.string().min(2, "Required"),
+    email: z.string().email("Enter a valid email"),
+    phone: z.string().regex(/^\+?[\d\s]{10,15}$/, "Enter a valid phone"),
+    designation: z.string().min(2, "Required"),
+    permissions: z
+      .array(
+        z.enum([
+          "view_records",
+          "manage_orders",
+          "review_documents",
+          "manage_trips",
+          "correct_extracted",
+          "verify_bills",
+          "record_payments",
+          "view_financial_reports",
+        ]),
+      )
+      .min(1, "Give at least one permission"),
+    method: z.enum(["invite", "temp_password", "magic_link"]),
+    password: z.string(),
+  })
+  .refine((v) => v.method !== "temp_password" || v.password.length >= 10, {
+    path: ["password"],
+    message: "Temporary password needs at least 10 characters",
+  });
+
+const resetSchema = z
+  .object({ method: z.enum(["email", "temp_password"]), password: z.string() })
+  .refine((v) => v.method !== "temp_password" || v.password.length >= 10, {
+    path: ["password"],
+    message: "Temporary password needs at least 10 characters",
+  });
 
 export function EmployeesPage() {
   const { data, isLoading, error } = useEmployees();
   const [adding, setAdding] = useState(false);
   const [toggling, setToggling] = useState<Employee | null>(null);
+  const [resetting, setResetting] = useState<Employee | null>(null);
+  const { user } = useAuth();
   const create = useAction(
-    api.admin.createEmployee,
+    (v: z.infer<typeof schema>) =>
+      api.admin.createEmployee({
+        name: v.name,
+        email: v.email,
+        phone: v.phone,
+        designation: v.designation,
+        permissions: v.permissions,
+        method: v.method,
+        ...(v.method === "temp_password" ? { password: v.password } : {}),
+      }),
     (e) => `${e.name} added · they can sign in with ${e.email}`,
+    { invalidate: [["employees"]] },
+  );
+  const reset = useAction(
+    (v: { id: string; method: "email" | "temp_password"; password?: string }) =>
+      api.admin.resetEmployeePassword(v.id, v.method, v.password),
+    (r) => (r.method === "email" ? "Password reset link sent" : "Temporary password set"),
+    { invalidate: [] },
   );
   const setActive = useAction(
     (v: { id: string; active: boolean }) => api.admin.setEmployeeActive(v.id, v.active),
     (e) => `${e.name} ${e.active ? "reactivated" : "deactivated"}`,
+    { invalidate: [["employees"], ["audit"]] },
   );
-  const setPermission = useAction(
-    (v: { id: string; key: (typeof PERMISSION_INFO)[number]["key"]; on: boolean }) =>
-      api.admin.setPermission(v.id, v.key, v.on),
-  );
+  const setPermission = useSetPermission();
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <PageSkeleton rows={6} />;
   const staff = data.filter((e) => e.role === "Employee");
+  const owners = data.filter((e) => e.role === "Owner");
 
   return (
     <>
@@ -66,11 +98,6 @@ export function EmployeesPage() {
           </Button>
         }
       />
-      <InfoNote className="mb-4">
-        <Info className="mr-1 inline size-3.5" />
-        Try it: switch to <strong>Employee (Neha)</strong> from the account menu and the sidebar
-        hides what she can't access.
-      </InfoNote>
 
       <SectionCard title="Team" className="mb-4" contentClassName="p-0">
         <ul className="divide-y">
@@ -100,7 +127,17 @@ export function EmployeesPage() {
                 status={e.role === "Owner" ? "Owner" : e.active ? "Active" : "Inactive"}
                 tone={e.role === "Owner" ? "info" : undefined}
               />
-              {e.role !== "Owner" && (
+              {e.id !== user?.id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setResetting(e)}
+                  aria-label={`Reset password for ${e.name}`}
+                >
+                  <KeyRound className="size-4" /> Reset password
+                </Button>
+              )}
+              {e.role !== "Owner" && e.id !== user?.id && (
                 <Button variant="outline" size="sm" onClick={() => setToggling(e)}>
                   {e.active ? (
                     <>
@@ -146,19 +183,21 @@ export function EmployeesPage() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b bg-primary/[0.03]">
-                <th scope="row" className="sticky left-0 bg-card px-5 py-3 text-left font-medium">
-                  Aarav Mehta{" "}
-                  <span className="block text-xs font-normal text-muted-foreground">
-                    Owner · always all
-                  </span>
-                </th>
-                {PERMISSION_INFO.map((p) => (
-                  <td key={p.key} className="px-2 py-3 text-center">
-                    <Switch checked disabled aria-label={`Owner: ${p.label}`} />
-                  </td>
-                ))}
-              </tr>
+              {owners.map((o) => (
+                <tr key={o.id} className="border-b bg-primary/[0.03]">
+                  <th scope="row" className="sticky left-0 bg-card px-5 py-3 text-left font-medium">
+                    {o.name}{" "}
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Owner · always all
+                    </span>
+                  </th>
+                  {PERMISSION_INFO.map((p) => (
+                    <td key={p.key} className="px-2 py-3 text-center">
+                      <Switch checked disabled aria-label={`${o.name}: ${p.label}`} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
               {staff.map((e) => (
                 <tr key={e.id} className={cn("border-b last:border-0", !e.active && "opacity-50")}>
                   <th scope="row" className="sticky left-0 bg-card px-5 py-3 text-left font-medium">
@@ -196,7 +235,7 @@ export function EmployeesPage() {
         open={adding}
         onOpenChange={setAdding}
         title="Add employee"
-        description="They'll get an invite to set a password (simulated)."
+        description="Choose how they sign in the first time. They only see what their permissions allow."
         schema={schema}
         defaults={{
           name: "",
@@ -204,6 +243,8 @@ export function EmployeesPage() {
           phone: "",
           designation: "",
           permissions: ["view_records"],
+          method: "invite",
+          password: "",
         }}
         fields={[
           { name: "name", label: "Full name" },
@@ -217,9 +258,55 @@ export function EmployeesPage() {
             full: true,
             options: PERMISSION_INFO.map((p) => ({ value: p.key, label: p.label })),
           },
+          {
+            name: "method",
+            label: "First sign-in",
+            type: "select",
+            options: [
+              { value: "invite", label: "Email an invite (they set a password)" },
+              { value: "magic_link", label: "Email a one-time sign-in link" },
+              { value: "temp_password", label: "Temporary password (tell them yourself)" },
+            ],
+          },
+          {
+            name: "password",
+            label: "Temporary password",
+            hint: "Only for the temporary-password option. At least 10 characters.",
+          },
         ]}
         onSubmit={(v) => create.mutateAsync(v)}
         submitLabel="Add employee"
+      />
+      <QuickAddDialog
+        open={Boolean(resetting)}
+        onOpenChange={(o) => !o && setResetting(null)}
+        title={`Reset password · ${resetting?.name ?? ""}`}
+        description="Email them a reset link, or set a temporary password and tell them yourself."
+        schema={resetSchema}
+        defaults={{ method: "email", password: "" }}
+        fields={[
+          {
+            name: "method",
+            label: "How",
+            type: "select",
+            full: true,
+            options: [
+              { value: "email", label: `Email a reset link to ${resetting?.email ?? ""}` },
+              { value: "temp_password", label: "Set a temporary password" },
+            ],
+          },
+          { name: "password", label: "Temporary password (only for that option)", full: true },
+        ]}
+        onSubmit={(v) =>
+          resetting
+            ? reset.mutateAsync({
+                id: resetting.id,
+                method: v.method,
+                ...(v.method === "temp_password" ? { password: v.password } : {}),
+              })
+            : Promise.resolve()
+        }
+        submitLabel="Reset password"
       />
       <ConfirmDialog
         open={Boolean(toggling)}
