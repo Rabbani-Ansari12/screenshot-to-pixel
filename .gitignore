@@ -30,3 +30,17 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets (never commit) — committed placeholders: .env.example, supabase/secrets.placeholder.env
+.env
+.env.*
+!.env.example
+supabase/.env
+supabase/secrets.env
+
+# Supabase CLI local state
+supabase/.temp
+supabase/.branches
+
+# bun.lock is the committed lockfile
+package-lock.json
