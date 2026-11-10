@@ -10,7 +10,7 @@ import {
   DatabaseBackup,
   FileDigit,
   Loader2,
-  MessageCircle,
+  Sparkles,
   Receipt,
   Ruler,
   Save,
@@ -270,6 +270,76 @@ const NOTIFS: { key: NotifKey; label: string; hint: string }[] = [
   },
 ];
 
+/** AI document reading: daily cost cap and matching thresholds (owner only). */
+function AiSettingsCard({ settings }: { settings: AppSettings }) {
+  const [ai, setAi] = useState(settings.ai);
+  useEffect(() => setAi(settings.ai), [settings.ai]);
+  const save = useAction(
+    (patch: Partial<AppSettings>) => api.admin.updateSettings(patch),
+    "AI settings saved",
+  );
+  const num = (key: keyof AppSettings["ai"], label: string, hint: string, step = 1) => (
+    <div className="space-y-1">
+      <Label htmlFor={`ai-${key}`}>{label}</Label>
+      <Input
+        id={`ai-${key}`}
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step={step}
+        value={Number.isFinite(ai[key]) ? ai[key] : ""}
+        onChange={(e) => setAi((v) => ({ ...v, [key]: e.target.valueAsNumber }))}
+      />
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+  return (
+    <SectionCard
+      title={
+        <span className="flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" />
+          AI document reading
+        </span>
+      }
+      actions={
+        <Button size="sm" disabled={save.isPending} onClick={() => save.mutate({ ai })}>
+          <Save className="size-4" />
+          Save
+        </Button>
+      }
+    >
+      <p className="mb-4 text-sm text-muted-foreground">
+        Today: <span className="font-medium text-foreground">{settings.ai.callsToday}</span> of{" "}
+        {settings.ai.dailyCallCap} AI calls used (about two per document).
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {num(
+          "dailyCallCap",
+          "Daily AI call limit",
+          "New documents wait until tomorrow when reached.",
+        )}
+        {num(
+          "netWeightTolerance",
+          "Net weight tolerance (MT)",
+          "Printed net vs gross − tare.",
+          0.01,
+        )}
+        {num("matchThreshold", "Match score needed (%)", "Below this a document goes to review.")}
+        {num(
+          "matchMargin",
+          "Lead over runner-up (%)",
+          "Closer than this counts as several matches.",
+        )}
+        {num(
+          "matchWindowHours",
+          "Late documents window (hours)",
+          "How long after loading a slip can still match.",
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
 export function SettingsPage() {
   const { data: settings, isLoading, error } = useSettings();
   const { data: materials } = useMaterials();
@@ -305,30 +375,7 @@ export function SettingsPage() {
       <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
         <BusinessForms settings={settings} />
         <div className="space-y-4">
-          <SectionCard
-            title={
-              <span className="flex items-center gap-2">
-                <MessageCircle className="size-4 text-emerald-600" />
-                WhatsApp connection
-              </span>
-            }
-            actions={
-              <StatusBadge status={settings.whatsapp.connected ? "Connected" : "Disconnected"} />
-            }
-          >
-            <DetailList
-              columns={2}
-              items={[
-                { label: "Provider", value: settings.whatsapp.provider },
-                { label: "Business number", value: settings.whatsapp.number },
-                { label: "Last message", value: formatRelative(settings.whatsapp.lastMessageAt) },
-                { label: "Webhook", value: "Managed by Twilio console" },
-              ]}
-            />
-            <p className="mt-3 text-xs text-muted-foreground">
-              Display only. The connection is configured with Twilio, not in this app.
-            </p>
-          </SectionCard>
+          <AiSettingsCard settings={settings} />
           <SectionCard
             title={
               <span className="flex items-center gap-2">

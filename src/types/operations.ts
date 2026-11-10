@@ -43,7 +43,7 @@ export interface Purchase {
   yardId: ID | null;
   documentIds: ID[];
   status: PurchaseStatus;
-  source: "WhatsApp" | "Manual";
+  source: "Document" | "Manual";
 }
 
 export type MeasurementSource = "Weighbridge" | "Manual Entry" | "Site Measurement";
@@ -57,7 +57,7 @@ export interface WeighRecord {
   location: string;
   source: MeasurementSource;
   documentId: ID | null;
-  /** True when the values were filled from a WhatsApp document by AI. */
+  /** True when the values were filled from an uploaded document by AI. */
   autoFilled: boolean;
 }
 
@@ -99,7 +99,7 @@ export interface Trip {
   delivery: WeighRecord | null;
   status: TripStatus;
   freight: number;
-  createdVia: "WhatsApp" | "Manual";
+  createdVia: "Document" | "Manual";
   investigation: Investigation | null;
 }
 

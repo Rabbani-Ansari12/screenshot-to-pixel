@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { FileUp, MessageCircle, Upload } from "lucide-react";
+import { FileUp, Link2, Upload } from "lucide-react";
 import type { DocumentRecord, DocumentType, ProcessingStatus } from "@/types";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/data-table";
@@ -32,6 +32,7 @@ export const PROCESSING_STATUSES: ProcessingStatus[] = [
   "Needs Review",
   "Failed",
   "Duplicate",
+  "Rejected",
 ];
 
 export function ConfidenceValue({ value, threshold = 85 }: { value: number; threshold?: number }) {
@@ -93,7 +94,7 @@ export function DocumentsPage() {
           <span className="min-w-0">
             <span className="block font-medium hover:underline">{d.type}</span>
             <span className="block truncate text-xs text-muted-foreground">
-              {d.id} · {d.fileName}
+              {d.ref ?? d.id} · {d.fileName}
             </span>
           </span>
         </Link>
@@ -101,12 +102,12 @@ export function DocumentsPage() {
     },
     {
       id: "sender",
-      header: "Sender",
+      header: "Uploaded by",
       sortValue: (d) => d.senderName,
       cell: (d) => (
         <div>
           <p>{d.senderName}</p>
-          <p className="text-xs text-muted-foreground">{d.senderPhone}</p>
+          {d.tripHint && <p className="text-xs text-muted-foreground">for {d.tripHint.label}</p>}
         </div>
       ),
     },
@@ -116,8 +117,8 @@ export function DocumentsPage() {
       hideBelow: "xl",
       cell: (d) => (
         <span className="inline-flex items-center gap-1.5 text-sm">
-          {d.source === "WhatsApp" ? (
-            <MessageCircle className="size-3.5 text-emerald-600" />
+          {d.source === "Driver Link" ? (
+            <Link2 className="size-3.5 text-muted-foreground" />
           ) : (
             <Upload className="size-3.5 text-muted-foreground" />
           )}
@@ -170,7 +171,7 @@ export function DocumentsPage() {
     <>
       <PageHeader
         title="Document Inbox"
-        description="Every slip, bill, photo and receipt received on WhatsApp or uploaded by hand — read by AI and matched to trips automatically."
+        description="Every slip, bill, photo and receipt uploaded by your team — read by AI and matched to trips automatically."
         actions={
           <Button onClick={() => setUpload(true)}>
             <FileUp className="size-4" /> Upload Document
@@ -195,7 +196,7 @@ export function DocumentsPage() {
         getRowId={(d) => d.id}
         rowHref={(d) => `/documents/${d.id}`}
         searchText={(d) =>
-          `${d.id} ${d.type} ${d.senderName} ${d.senderPhone} ${d.fileName} ${d.link?.label ?? ""}`
+          `${d.ref ?? d.id} ${d.type} ${d.senderName} ${d.fileName} ${d.link?.label ?? ""}`
         }
         searchPlaceholder="Search sender, file, trip…"
         filters={[
@@ -215,8 +216,8 @@ export function DocumentsPage() {
             id: "source",
             label: "Sources",
             options: [
-              { value: "WhatsApp", label: "WhatsApp" },
-              { value: "Manual Upload", label: "Manual Upload" },
+              { value: "Staff Upload", label: "Uploaded" },
+              { value: "Driver Link", label: "Driver link" },
             ],
             value: (d) => d.source,
           },

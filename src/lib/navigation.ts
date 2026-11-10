@@ -57,12 +57,6 @@ export const NAV_GROUPS: NavGroup[] = [
         requires: "review_documents",
         badge: "review",
       },
-      {
-        label: "WhatsApp Messages",
-        path: "/whatsapp",
-        icon: MessageCircle,
-        requires: "view_records",
-      },
     ],
   },
   {
@@ -173,9 +167,6 @@ export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
  * connected to Supabase. The app shell shows a notice on these pages.
  */
 export const SAMPLE_DATA_PREFIXES = [
-  "/documents",
-  "/review",
-  "/whatsapp",
   "/reconciliation",
   "/bills",
   "/invoices",

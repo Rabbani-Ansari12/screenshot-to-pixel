@@ -150,7 +150,7 @@ export function PurchaseDetailPage({ purchaseId }: { purchaseId: string }) {
               },
               {
                 label: "Source",
-                value: p.source === "WhatsApp" ? "Created from WhatsApp slips" : "Entered manually",
+                value: p.source === "Document" ? "Created from uploaded slips" : "Entered manually",
               },
             ]}
           />

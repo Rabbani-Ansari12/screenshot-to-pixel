@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { InfoNote, SectionCard } from "@/components/common";
 import { EntityPicker } from "@/components/entity-picker";
 import { PageHeader } from "@/components/page-header";
-import { api, useAction, useMasterOptions } from "@/hooks/queries";
+import { api, useAction, useDocument, useMasterOptions } from "@/hooks/queries";
 import { formatNumber, nowISTLocal } from "@/lib/format";
 
 const n = (msg: string) => z.number({ invalid_type_error: msg }).nonnegative();
@@ -80,8 +80,24 @@ const schema = z
   });
 type Values = z.infer<typeof schema>;
 
-export function TripFormPage({ orderId }: { orderId?: string }) {
+export function TripFormPage({
+  orderId,
+  fromDocument,
+}: {
+  orderId?: string;
+  fromDocument?: string;
+}) {
   const { data: options } = useMasterOptions();
+  const { data: fromDoc } = useDocument(fromDocument ?? "");
+  const createFromDoc = useAction(
+    (v: Parameters<typeof api.documents.createTripFromDocument>[1]) =>
+      api.documents.createTripFromDocument(
+        fromDocument ?? "",
+        v,
+        "Trip created in review from the uploaded slip",
+      ),
+    (t) => `Trip ${t.trip_code} created from the document`,
+  );
   const navigate = useNavigate();
   const create = useAction(api.trips.createTrip, (t) => `Trip ${t.id} created`);
   const form = useForm<Values>({
@@ -193,7 +209,33 @@ export function TripFormPage({ orderId }: { orderId?: string }) {
     />
   );
 
+  // Weights from the reviewed document (the database records them from the document itself).
+  useEffect(() => {
+    const doc = fromDoc?.document;
+    if (!doc) return;
+    const value = (k: string) => doc.fields.find((f) => f.key === k)?.value ?? "";
+    const num = (k: string) => (value(k) === "" ? Number.NaN : Number(value(k)));
+    form.setValue("loadingGross", num("gross_weight"));
+    form.setValue("loadingTare", num("tare_weight"));
+    form.setValue("loadingSlip", value("slip_number") || "—");
+    if (value("date")) form.setValue("loadingAt", `${value("date")}T${value("time") || "12:00"}`);
+  }, [fromDoc, form]);
+
   const submit = async (v: Values) => {
+    if (fromDocument) {
+      const created = await createFromDoc.mutateAsync({
+        orderId: v.orderId,
+        materialId: v.materialId,
+        providerId: v.source === "provider" ? v.providerId : null,
+        yardId: v.source === "yard" ? v.yardId : null,
+        transporterId: v.transporterId,
+        vehicleId: v.vehicleId,
+        driverId: v.driverId,
+        freight: v.freight,
+      });
+      void navigate({ to: "/trips/$tripId", params: { tripId: created.trip_code } });
+      return;
+    }
     const trip = await create.mutateAsync({
       ...v,
       yardId: v.source === "yard" ? v.yardId : null,
@@ -208,14 +250,26 @@ export function TripFormPage({ orderId }: { orderId?: string }) {
   return (
     <>
       <PageHeader
-        title="Create trip"
-        crumbs={[{ label: "New (manual)" }]}
-        description="Manual fallback. Normally trips are created when the loading slip arrives on WhatsApp."
+        title={fromDocument ? "Create trip from document" : "Create trip"}
+        crumbs={[{ label: fromDocument ? "From document" : "New (manual)" }]}
+        description={
+          fromDocument
+            ? "Choose the order, transporter and vehicle. The loading weight comes from the uploaded slip."
+            : "Manual fallback. Normally trips are created from uploaded loading slips."
+        }
       />
-      <InfoNote tone="warning" className="mb-4">
-        Only use this when WhatsApp is down or a slip was never sent. Manually entered values are
-        marked “Manual entry” on the trip.
-      </InfoNote>
+      {fromDocument ? (
+        <InfoNote className="mb-4">
+          Loading weight and slip number are taken from{" "}
+          <strong>{fromDoc?.document.ref ?? "the document"}</strong> exactly as read (with any
+          corrections). Change them on the document, not here.
+        </InfoNote>
+      ) : (
+        <InfoNote tone="warning" className="mb-4">
+          Only use this when a slip was never uploaded. Manually entered values are marked “Manual
+          entry” on the trip.
+        </InfoNote>
+      )}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(submit)} className="space-y-4" noValidate>
           <SectionCard title="Order & material">

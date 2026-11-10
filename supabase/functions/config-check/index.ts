@@ -13,7 +13,11 @@ Deno.serve(async (req) => {
   const { data: isOwner, error } = await supabase.rpc("is_owner");
   if (error || !isOwner) return json({ error: "Owner access required" }, 403);
 
-  const secrets = Object.fromEntries(SECRET_NAMES.map((name) => [name, secretProblem(name) ?? "configured"]));
-  const pending = Object.entries(secrets).filter(([, state]) => state !== "configured").map(([name]) => name);
+  const secrets = Object.fromEntries(
+    SECRET_NAMES.map((name) => [name, secretProblem(name) ?? "configured"]),
+  );
+  const pending = Object.entries(secrets)
+    .filter(([, state]) => state !== "configured")
+    .map(([name]) => name);
   return json({ ok: pending.length === 0, pending, secrets });
 });

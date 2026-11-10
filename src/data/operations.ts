@@ -338,7 +338,7 @@ orders.forEach((order, orderIndex) => {
         2,
       );
       const isWeighed = m.unit === "MT";
-      const viaWhatsApp = date >= "2026-10-01" && rng.chance(0.9);
+      const viaDocument = date >= "2026-10-01" && rng.chance(0.9);
       drafts.push({
         sortKey: `${date}T${pad(hour, 2)}${pad(minute, 2)}-${order.id}-${k}`,
         orderId: order.id,
@@ -359,12 +359,12 @@ orders.forEach((order, orderIndex) => {
           location: `${provider.city} weighbridge`,
           source: isWeighed ? "Weighbridge" : "Manual Entry",
           documentId: null,
-          autoFilled: viaWhatsApp,
+          autoFilled: viaDocument,
         },
         delivery: null,
         status: "In Transit",
         freight: transporter.ratePerTrip + (rng.chance(0.15) ? 400 : 0),
-        createdVia: viaWhatsApp ? "WhatsApp" : "Manual",
+        createdVia: viaDocument ? "Document" : "Manual",
         investigation: null,
       });
     });
@@ -452,7 +452,7 @@ export const trips: Trip[] = drafts.map(({ sortKey: _sortKey, ...trip }, i) => {
     source:
       m.unit === "MT" ? "Weighbridge" : m.unit === "Brass" ? "Site Measurement" : "Manual Entry",
     documentId: null,
-    autoFilled: trip.createdVia === "WhatsApp",
+    autoFilled: trip.createdVia === "Document",
   };
   const status =
     diff <= m.tolerance

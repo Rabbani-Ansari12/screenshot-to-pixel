@@ -130,6 +130,25 @@ function Paper({ doc }: { doc: DocumentRecord }) {
   );
 }
 
+/** The stored original (signed URL, private bucket). */
+function OriginalFile({ doc }: { doc: DocumentRecord }) {
+  if (doc.mimeType === "application/pdf")
+    return (
+      <iframe
+        src={doc.fileUrl ?? undefined}
+        title={`Original ${doc.fileName}`}
+        className="h-[560px] w-[420px] rounded-sm bg-white shadow-lg"
+      />
+    );
+  return (
+    <img
+      src={doc.fileUrl ?? undefined}
+      alt={`Original ${doc.type.toLowerCase()} ${doc.fileName}`}
+      className="max-h-[640px] w-[420px] rounded-sm object-contain shadow-lg"
+    />
+  );
+}
+
 /** Original document view with zoom and rotate. */
 export function DocumentViewer({ doc, className }: { doc: DocumentRecord; className?: string }) {
   const [zoom, setZoom] = useState(1);
@@ -195,7 +214,11 @@ export function DocumentViewer({ doc, className }: { doc: DocumentRecord; classN
           variant="ghost"
           size="icon"
           className="size-8"
-          onClick={() => toast.info("Download is not available in the demo")}
+          onClick={() =>
+            doc.fileUrl
+              ? window.open(doc.fileUrl, "_blank", "noopener")
+              : toast.info("The original file is not available")
+          }
           aria-label="Download original"
         >
           <Download className="size-4" />
@@ -214,7 +237,7 @@ export function DocumentViewer({ doc, className }: { doc: DocumentRecord; classN
         className="transition-transform duration-200"
         style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }}
       >
-        <Paper doc={doc} />
+        {doc.fileUrl ? <OriginalFile doc={doc} /> : <Paper doc={doc} />}
       </div>
     </div>
   );
@@ -231,7 +254,7 @@ export function DocumentViewer({ doc, className }: { doc: DocumentRecord; classN
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>
-              {doc.id} · {doc.type}
+              {doc.ref ?? doc.id} · {doc.type}
             </DialogTitle>
           </DialogHeader>
           {toolbar}

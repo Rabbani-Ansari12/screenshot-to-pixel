@@ -21,7 +21,6 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShortagesRouteImport } from './routes/shortages'
 import { Route as StockRouteImport } from './routes/stock'
-import { Route as WhatsappRouteImport } from './routes/whatsapp'
 import { Route as BillsBillIdRouteImport } from './routes/bills/$billId'
 import { Route as BillsProviderRouteImport } from './routes/bills/provider'
 import { Route as BillsTransporterRouteImport } from './routes/bills/transporter'
@@ -114,11 +113,6 @@ const ShortagesRoute = ShortagesRouteImport.update({
 const StockRoute = StockRouteImport.update({
   id: '/stock',
   path: '/stock',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WhatsappRoute = WhatsappRouteImport.update({
-  id: '/whatsapp',
-  path: '/whatsapp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillsBillIdRoute = BillsBillIdRouteImport.update({
@@ -301,7 +295,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
-  '/whatsapp': typeof WhatsappRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
   '/bills/transporter': typeof BillsTransporterRoute
@@ -349,7 +342,6 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
-  '/whatsapp': typeof WhatsappRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
   '/bills/transporter': typeof BillsTransporterRoute
@@ -398,7 +390,6 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
-  '/whatsapp': typeof WhatsappRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
   '/bills/transporter': typeof BillsTransporterRoute
@@ -448,7 +439,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
-    | '/whatsapp'
     | '/bills/$billId'
     | '/bills/provider'
     | '/bills/transporter'
@@ -496,7 +486,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
-    | '/whatsapp'
     | '/bills/$billId'
     | '/bills/provider'
     | '/bills/transporter'
@@ -544,7 +533,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
-    | '/whatsapp'
     | '/bills/$billId'
     | '/bills/provider'
     | '/bills/transporter'
@@ -593,7 +581,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ShortagesRoute: typeof ShortagesRoute
   StockRoute: typeof StockRoute
-  WhatsappRoute: typeof WhatsappRoute
   BillsBillIdRoute: typeof BillsBillIdRoute
   BillsProviderRoute: typeof BillsProviderRoute
   BillsTransporterRoute: typeof BillsTransporterRoute
@@ -713,13 +700,6 @@ declare module '@tanstack/react-router' {
       path: '/stock'
       fullPath: '/stock'
       preLoaderRoute: typeof StockRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/whatsapp': {
-      id: '/whatsapp'
-      path: '/whatsapp'
-      fullPath: '/whatsapp'
-      preLoaderRoute: typeof WhatsappRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bills/$billId': {
@@ -969,7 +949,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ShortagesRoute: ShortagesRoute,
   StockRoute: StockRoute,
-  WhatsappRoute: WhatsappRoute,
   BillsBillIdRoute: BillsBillIdRoute,
   BillsProviderRoute: BillsProviderRoute,
   BillsTransporterRoute: BillsTransporterRoute,

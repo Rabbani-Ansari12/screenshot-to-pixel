@@ -14,39 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      provider_materials: {
-        Row: {
-          business_id: string
-          created_at: string
-          created_by: string | null
-          id: string
-          material_id: string
-          provider_id: string
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          business_id?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          material_id: string
-          provider_id: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          business_id?: string
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          material_id?: string
-          provider_id?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: []
-      }
       ai_processing_records: {
         Row: {
           attempts: number
@@ -67,6 +34,7 @@ export type Database = {
           status: Database["public"]["Enums"]["ai_status"]
           updated_at: string
           updated_by: string | null
+          usage: Json | null
         }
         Insert: {
           attempts?: number
@@ -87,6 +55,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["ai_status"]
           updated_at?: string
           updated_by?: string | null
+          usage?: Json | null
         }
         Update: {
           attempts?: number
@@ -107,26 +76,37 @@ export type Database = {
           status?: Database["public"]["Enums"]["ai_status"]
           updated_at?: string
           updated_by?: string | null
+          usage?: Json | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "ai_processing_records_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_processing_records_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      ai_usage_daily: {
+        Row: {
+          business_id: string
+          calls: number
+          day: string
+          output_tokens: number
+          prompt_tokens: number
+        }
+        Insert: {
+          business_id: string
+          calls?: number
+          day: string
+          output_tokens?: number
+          prompt_tokens?: number
+        }
+        Update: {
+          business_id?: string
+          calls?: number
+          day?: string
+          output_tokens?: number
+          prompt_tokens?: number
+        }
+        Relationships: []
       }
       app_settings: {
         Row: {
+          ai_daily_call_cap: number
           authoritative_weight: Database["public"]["Enums"]["weight_record_type"]
           auto_process_confidence_threshold: number
           business_id: string
@@ -139,12 +119,18 @@ export type Database = {
           id: string
           invoice_number_width: number
           invoice_prefix: string
+          match_margin: number
+          match_threshold: number
+          match_weights: Json
+          match_window_hours: number
+          net_weight_tolerance: number
           next_invoice_number: number
           notification_preferences: Json
           updated_at: string
           updated_by: string | null
         }
         Insert: {
+          ai_daily_call_cap?: number
           authoritative_weight?: Database["public"]["Enums"]["weight_record_type"]
           auto_process_confidence_threshold?: number
           business_id?: string
@@ -157,12 +143,18 @@ export type Database = {
           id?: string
           invoice_number_width?: number
           invoice_prefix?: string
+          match_margin?: number
+          match_threshold?: number
+          match_weights?: Json
+          match_window_hours?: number
+          net_weight_tolerance?: number
           next_invoice_number?: number
           notification_preferences?: Json
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
+          ai_daily_call_cap?: number
           authoritative_weight?: Database["public"]["Enums"]["weight_record_type"]
           auto_process_confidence_threshold?: number
           business_id?: string
@@ -175,20 +167,17 @@ export type Database = {
           id?: string
           invoice_number_width?: number
           invoice_prefix?: string
+          match_margin?: number
+          match_threshold?: number
+          match_weights?: Json
+          match_window_hours?: number
+          net_weight_tolerance?: number
           next_invoice_number?: number
           notification_preferences?: Json
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "app_settings_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: true
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       audit_logs: {
         Row: {
@@ -199,8 +188,8 @@ export type Database = {
           id: string
           new_data: Json | null
           old_data: Json | null
-          record_id: string | null
           reason: string | null
+          record_id: string | null
           table_name: string
         }
         Insert: {
@@ -211,8 +200,8 @@ export type Database = {
           id?: string
           new_data?: Json | null
           old_data?: Json | null
-          record_id?: string | null
           reason?: string | null
+          record_id?: string | null
           table_name: string
         }
         Update: {
@@ -223,19 +212,11 @@ export type Database = {
           id?: string
           new_data?: Json | null
           old_data?: Json | null
-          record_id?: string | null
           reason?: string | null
+          record_id?: string | null
           table_name?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "audit_logs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       businesses: {
         Row: {
@@ -319,29 +300,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "construction_sites_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "construction_sites_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "construction_sites_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-        ]
+        Relationships: []
       }
       customer_invoices: {
         Row: {
@@ -416,57 +375,7 @@ export type Database = {
           updated_by?: string | null
           verification_flags?: string[]
         }
-        Relationships: [
-          {
-            foreignKeyName: "customer_invoices_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_invoices_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_invoices_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-          {
-            foreignKeyName: "customer_invoices_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_invoices_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_profit"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "customer_invoices_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "customer_invoices_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "construction_sites"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       customer_orders: {
         Row: {
@@ -520,36 +429,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "customer_orders_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-          {
-            foreignKeyName: "customer_orders_site_id_customer_id_fkey"
-            columns: ["site_id", "customer_id"]
-            isOneToOne: false
-            referencedRelation: "construction_sites"
-            referencedColumns: ["id", "customer_id"]
-          },
-        ]
+        Relationships: []
       }
       customers: {
         Row: {
@@ -612,15 +492,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "customers_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       delivery_records: {
         Row: {
@@ -634,18 +506,14 @@ export type Database = {
           investigated_at: string | null
           investigated_by: string | null
           investigation_notes: string | null
-          investigation_outcome:
-            | Database["public"]["Enums"]["investigation_outcome"]
-            | null
+          investigation_outcome: Database["public"]["Enums"]["investigation_outcome"] | null
           loading_net: number | null
           loading_weight_id: string | null
           quantity_difference: number | null
           received_by_name: string | null
           site_id: string | null
           tolerance: number
-          tolerance_status:
-            | Database["public"]["Enums"]["tolerance_status"]
-            | null
+          tolerance_status: Database["public"]["Enums"]["tolerance_status"] | null
           trip_id: string
           updated_at: string
           updated_by: string | null
@@ -661,18 +529,14 @@ export type Database = {
           investigated_at?: string | null
           investigated_by?: string | null
           investigation_notes?: string | null
-          investigation_outcome?:
-            | Database["public"]["Enums"]["investigation_outcome"]
-            | null
+          investigation_outcome?: Database["public"]["Enums"]["investigation_outcome"] | null
           loading_net?: number | null
           loading_weight_id?: string | null
-          quantity_difference?: number | null
+          quantity_difference?: never
           received_by_name?: string | null
           site_id?: string | null
           tolerance?: number
-          tolerance_status?:
-            | Database["public"]["Enums"]["tolerance_status"]
-            | null
+          tolerance_status?: never
           trip_id: string
           updated_at?: string
           updated_by?: string | null
@@ -688,101 +552,100 @@ export type Database = {
           investigated_at?: string | null
           investigated_by?: string | null
           investigation_notes?: string | null
-          investigation_outcome?:
-            | Database["public"]["Enums"]["investigation_outcome"]
-            | null
+          investigation_outcome?: Database["public"]["Enums"]["investigation_outcome"] | null
           loading_net?: number | null
           loading_weight_id?: string | null
-          quantity_difference?: number | null
+          quantity_difference?: never
           received_by_name?: string | null
           site_id?: string | null
           tolerance?: number
-          tolerance_status?:
-            | Database["public"]["Enums"]["tolerance_status"]
-            | null
+          tolerance_status?: never
           trip_id?: string
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "delivery_records_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_records_delivery_weight_id_fkey"
-            columns: ["delivery_weight_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["delivery_weight_id"]
-          },
-          {
-            foreignKeyName: "delivery_records_delivery_weight_id_fkey"
-            columns: ["delivery_weight_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["loading_weight_id"]
-          },
-          {
-            foreignKeyName: "delivery_records_delivery_weight_id_fkey"
-            columns: ["delivery_weight_id"]
-            isOneToOne: false
-            referencedRelation: "weight_records"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_records_loading_weight_id_fkey"
-            columns: ["loading_weight_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["delivery_weight_id"]
-          },
-          {
-            foreignKeyName: "delivery_records_loading_weight_id_fkey"
-            columns: ["loading_weight_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["loading_weight_id"]
-          },
-          {
-            foreignKeyName: "delivery_records_loading_weight_id_fkey"
-            columns: ["loading_weight_id"]
-            isOneToOne: false
-            referencedRelation: "weight_records"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_records_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "construction_sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_records_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: true
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_records_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: true
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "delivery_records_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: true
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-        ]
+        Relationships: []
+      }
+      document_corrections: {
+        Row: {
+          business_id: string
+          corrected_at: string
+          corrected_by: string | null
+          corrected_value: string | null
+          created_at: string
+          document_id: string
+          field_key: string
+          id: string
+          original_value: string | null
+          reason: string
+        }
+        Insert: {
+          business_id: string
+          corrected_at?: string
+          corrected_by?: string | null
+          corrected_value?: string | null
+          created_at?: string
+          document_id: string
+          field_key: string
+          id?: string
+          original_value?: string | null
+          reason: string
+        }
+        Update: {
+          business_id?: string
+          corrected_at?: string
+          corrected_by?: string | null
+          corrected_value?: string | null
+          created_at?: string
+          document_id?: string
+          field_key?: string
+          id?: string
+          original_value?: string | null
+          reason?: string
+        }
+        Relationships: []
+      }
+      document_jobs: {
+        Row: {
+          attempts: number
+          business_id: string
+          created_at: string
+          document_id: string
+          id: string
+          last_error: string | null
+          locked_at: string | null
+          max_attempts: number
+          next_run_at: string
+          status: Database["public"]["Enums"]["document_job_status"]
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          business_id: string
+          created_at?: string
+          document_id: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          status?: Database["public"]["Enums"]["document_job_status"]
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          business_id?: string
+          created_at?: string
+          document_id?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          status?: Database["public"]["Enums"]["document_job_status"]
+          updated_at?: string
+        }
+        Relationships: []
       }
       documents: {
         Row: {
@@ -792,7 +655,9 @@ export type Database = {
           deleted_at: string | null
           delivery_record_id: string | null
           doc_type: Database["public"]["Enums"]["document_type"]
+          document_type_hint: string | null
           duplicate_of_document_id: string | null
+          extracted: Json | null
           file_name: string | null
           id: string
           invoice_id: string | null
@@ -801,22 +666,25 @@ export type Database = {
           overall_confidence: number | null
           page_count: number | null
           payment_id: string | null
+          processed_at: string | null
           provider_bill_id: string | null
           purchase_id: string | null
           received_at: string
+          record_type: Database["public"]["Enums"]["weight_record_type"] | null
+          review_detail: Json | null
           review_reason: Database["public"]["Enums"]["review_reason"] | null
-          sender_name: string | null
-          sender_phone: string | null
           sha256: string
           size_bytes: number | null
-          source: Database["public"]["Enums"]["document_source"]
+          source: Database["public"]["Enums"]["document_intake_source"]
           status: Database["public"]["Enums"]["document_status"]
           storage_path: string
           transporter_bill_id: string | null
+          trip_hint_id: string | null
           trip_id: string | null
           updated_at: string
           updated_by: string | null
-          whatsapp_message_id: string | null
+          uploaded_by: string | null
+          uploaded_by_label: string | null
         }
         Insert: {
           business_id?: string
@@ -825,7 +693,9 @@ export type Database = {
           deleted_at?: string | null
           delivery_record_id?: string | null
           doc_type?: Database["public"]["Enums"]["document_type"]
+          document_type_hint?: string | null
           duplicate_of_document_id?: string | null
+          extracted?: Json | null
           file_name?: string | null
           id?: string
           invoice_id?: string | null
@@ -834,22 +704,25 @@ export type Database = {
           overall_confidence?: number | null
           page_count?: number | null
           payment_id?: string | null
+          processed_at?: string | null
           provider_bill_id?: string | null
           purchase_id?: string | null
           received_at?: string
+          record_type?: Database["public"]["Enums"]["weight_record_type"] | null
+          review_detail?: Json | null
           review_reason?: Database["public"]["Enums"]["review_reason"] | null
-          sender_name?: string | null
-          sender_phone?: string | null
           sha256: string
           size_bytes?: number | null
-          source: Database["public"]["Enums"]["document_source"]
+          source?: Database["public"]["Enums"]["document_intake_source"]
           status?: Database["public"]["Enums"]["document_status"]
           storage_path: string
           transporter_bill_id?: string | null
+          trip_hint_id?: string | null
           trip_id?: string | null
           updated_at?: string
           updated_by?: string | null
-          whatsapp_message_id?: string | null
+          uploaded_by?: string | null
+          uploaded_by_label?: string | null
         }
         Update: {
           business_id?: string
@@ -858,7 +731,9 @@ export type Database = {
           deleted_at?: string | null
           delivery_record_id?: string | null
           doc_type?: Database["public"]["Enums"]["document_type"]
+          document_type_hint?: string | null
           duplicate_of_document_id?: string | null
+          extracted?: Json | null
           file_name?: string | null
           id?: string
           invoice_id?: string | null
@@ -867,109 +742,27 @@ export type Database = {
           overall_confidence?: number | null
           page_count?: number | null
           payment_id?: string | null
+          processed_at?: string | null
           provider_bill_id?: string | null
           purchase_id?: string | null
           received_at?: string
+          record_type?: Database["public"]["Enums"]["weight_record_type"] | null
+          review_detail?: Json | null
           review_reason?: Database["public"]["Enums"]["review_reason"] | null
-          sender_name?: string | null
-          sender_phone?: string | null
           sha256?: string
           size_bytes?: number | null
-          source?: Database["public"]["Enums"]["document_source"]
+          source?: Database["public"]["Enums"]["document_intake_source"]
           status?: Database["public"]["Enums"]["document_status"]
           storage_path?: string
           transporter_bill_id?: string | null
+          trip_hint_id?: string | null
           trip_id?: string | null
           updated_at?: string
           updated_by?: string | null
-          whatsapp_message_id?: string | null
+          uploaded_by?: string | null
+          uploaded_by_label?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "documents_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_delivery_record_id_fkey"
-            columns: ["delivery_record_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_records"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_duplicate_of_document_id_fkey"
-            columns: ["duplicate_of_document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "customer_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_payment_id_fkey"
-            columns: ["payment_id"]
-            isOneToOne: false
-            referencedRelation: "payments"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_provider_bill_id_fkey"
-            columns: ["provider_bill_id"]
-            isOneToOne: false
-            referencedRelation: "provider_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_purchase_id_fkey"
-            columns: ["purchase_id"]
-            isOneToOne: false
-            referencedRelation: "purchases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_transporter_bill_id_fkey"
-            columns: ["transporter_bill_id"]
-            isOneToOne: false
-            referencedRelation: "transporter_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "documents_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-          {
-            foreignKeyName: "documents_whatsapp_message_id_fkey"
-            columns: ["whatsapp_message_id"]
-            isOneToOne: false
-            referencedRelation: "whatsapp_messages"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       drivers: {
         Row: {
@@ -1014,29 +807,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "drivers_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "drivers_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "drivers_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-        ]
+        Relationships: []
       }
       employees: {
         Row: {
@@ -1087,22 +858,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "employees_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "employees_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       expenses: {
         Row: {
@@ -1156,57 +912,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "expenses_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "expenses_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "expenses_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_profit"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "expenses_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "expenses_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "expenses_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "expenses_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-        ]
+        Relationships: []
       }
       invoice_items: {
         Row: {
@@ -1228,7 +934,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
-          amount?: number | null
+          amount?: never
           business_id?: string
           created_at?: string
           created_by?: string | null
@@ -1246,7 +952,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
-          amount?: number | null
+          amount?: never
           business_id?: string
           created_at?: string
           created_by?: string | null
@@ -1263,57 +969,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "invoice_items_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_delivery_record_id_fkey"
-            columns: ["delivery_record_id"]
-            isOneToOne: false
-            referencedRelation: "delivery_records"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "customer_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "invoice_items_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-        ]
+        Relationships: []
       }
       material_providers: {
         Row: {
@@ -1364,15 +1020,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "material_providers_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       material_rates: {
         Row: {
@@ -1417,36 +1065,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "material_rates_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "material_rates_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "material_rates_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "material_providers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "material_rates_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "v_provider_payable"
-            referencedColumns: ["provider_id"]
-          },
-        ]
+        Relationships: []
       }
       materials: {
         Row: {
@@ -1503,15 +1122,52 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "materials_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          business_id: string
+          created_at: string
+          detail: string | null
+          document_id: string | null
+          href: string | null
+          id: string
+          kind: string
+          read_by: string[]
+          required_permission: Database["public"]["Enums"]["permission_key"] | null
+          severity: string
+          title: string
+          trip_id: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          detail?: string | null
+          document_id?: string | null
+          href?: string | null
+          id?: string
+          kind: string
+          read_by?: string[]
+          required_permission?: Database["public"]["Enums"]["permission_key"] | null
+          severity?: string
+          title: string
+          trip_id?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          detail?: string | null
+          document_id?: string | null
+          href?: string | null
+          id?: string
+          kind?: string
+          read_by?: string[]
+          required_permission?: Database["public"]["Enums"]["permission_key"] | null
+          severity?: string
+          title?: string
+          trip_id?: string | null
+        }
+        Relationships: []
       }
       order_items: {
         Row: {
@@ -1556,43 +1212,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "order_items_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_profit"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_id"]
-          },
-        ]
+        Relationships: []
       }
       payments: {
         Row: {
@@ -1664,78 +1284,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "payments_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-          {
-            foreignKeyName: "payments_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "customer_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_provider_bill_id_fkey"
-            columns: ["provider_bill_id"]
-            isOneToOne: false
-            referencedRelation: "provider_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "material_providers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "v_provider_payable"
-            referencedColumns: ["provider_id"]
-          },
-          {
-            foreignKeyName: "payments_transporter_bill_id_fkey"
-            columns: ["transporter_bill_id"]
-            isOneToOne: false
-            referencedRelation: "transporter_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payments_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1777,15 +1326,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       provider_bill_items: {
         Row: {
@@ -1848,57 +1389,7 @@ export type Database = {
           updated_by?: string | null
           vehicle_number?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "provider_bill_items_bill_id_fkey"
-            columns: ["bill_id"]
-            isOneToOne: false
-            referencedRelation: "provider_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bill_items_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bill_items_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bill_items_purchase_id_fkey"
-            columns: ["purchase_id"]
-            isOneToOne: false
-            referencedRelation: "purchases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bill_items_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bill_items_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bill_items_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-        ]
+        Relationships: []
       }
       provider_bills: {
         Row: {
@@ -1958,36 +1449,40 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "provider_bills_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bills_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bills_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "material_providers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "provider_bills_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "v_provider_payable"
-            referencedColumns: ["provider_id"]
-          },
-        ]
+        Relationships: []
+      }
+      provider_materials: {
+        Row: {
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          material_id: string
+          provider_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id: string
+          provider_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id?: string
+          provider_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       purchase_items: {
         Row: {
@@ -2038,29 +1533,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "purchase_items_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchase_items_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchase_items_purchase_id_fkey"
-            columns: ["purchase_id"]
-            isOneToOne: false
-            referencedRelation: "purchases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       purchases: {
         Row: {
@@ -2117,57 +1590,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "purchases_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchases_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchases_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_profit"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "purchases_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "purchases_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "material_providers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchases_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "v_provider_payable"
-            referencedColumns: ["provider_id"]
-          },
-          {
-            foreignKeyName: "purchases_stock_location_id_fkey"
-            columns: ["stock_location_id"]
-            isOneToOne: false
-            referencedRelation: "stock_locations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       reconciliation_records: {
         Row: {
@@ -2198,8 +1621,8 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
-          amount_difference?: number | null
-          bill_id?: string | null
+          amount_difference?: never
+          bill_id?: never
           bill_type: Database["public"]["Enums"]["bill_type"]
           billed_amount?: number | null
           billed_quantity?: number | null
@@ -2211,7 +1634,7 @@ export type Database = {
           invoice_id?: string | null
           note?: string | null
           provider_bill_id?: string | null
-          quantity_difference?: number | null
+          quantity_difference?: never
           reason?: string | null
           recorded_amount?: number | null
           recorded_quantity?: number | null
@@ -2220,13 +1643,13 @@ export type Database = {
           resolved_by?: string | null
           status?: Database["public"]["Enums"]["recon_status"]
           transporter_bill_id?: string | null
-          trip_difference?: number | null
+          trip_difference?: never
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
-          amount_difference?: number | null
-          bill_id?: string | null
+          amount_difference?: never
+          bill_id?: never
           bill_type?: Database["public"]["Enums"]["bill_type"]
           billed_amount?: number | null
           billed_quantity?: number | null
@@ -2238,7 +1661,7 @@ export type Database = {
           invoice_id?: string | null
           note?: string | null
           provider_bill_id?: string | null
-          quantity_difference?: number | null
+          quantity_difference?: never
           reason?: string | null
           recorded_amount?: number | null
           recorded_quantity?: number | null
@@ -2247,40 +1670,11 @@ export type Database = {
           resolved_by?: string | null
           status?: Database["public"]["Enums"]["recon_status"]
           transporter_bill_id?: string | null
-          trip_difference?: number | null
+          trip_difference?: never
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "reconciliation_records_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reconciliation_records_invoice_id_fkey"
-            columns: ["invoice_id"]
-            isOneToOne: false
-            referencedRelation: "customer_invoices"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reconciliation_records_provider_bill_id_fkey"
-            columns: ["provider_bill_id"]
-            isOneToOne: false
-            referencedRelation: "provider_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reconciliation_records_transporter_bill_id_fkey"
-            columns: ["transporter_bill_id"]
-            isOneToOne: false
-            referencedRelation: "transporter_bills"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       stock_locations: {
         Row: {
@@ -2319,15 +1713,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "stock_locations_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       stock_movements: {
         Row: {
@@ -2378,57 +1764,7 @@ export type Database = {
           updated_by?: string | null
           weight_record_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "stock_movements_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_movements_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_movements_purchase_item_id_fkey"
-            columns: ["purchase_item_id"]
-            isOneToOne: true
-            referencedRelation: "purchase_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_movements_stock_location_id_fkey"
-            columns: ["stock_location_id"]
-            isOneToOne: false
-            referencedRelation: "stock_locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_movements_weight_record_id_fkey"
-            columns: ["weight_record_id"]
-            isOneToOne: true
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["delivery_weight_id"]
-          },
-          {
-            foreignKeyName: "stock_movements_weight_record_id_fkey"
-            columns: ["weight_record_id"]
-            isOneToOne: true
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["loading_weight_id"]
-          },
-          {
-            foreignKeyName: "stock_movements_weight_record_id_fkey"
-            columns: ["weight_record_id"]
-            isOneToOne: true
-            referencedRelation: "weight_records"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       transporter_bill_trips: {
         Row: {
@@ -2476,43 +1812,7 @@ export type Database = {
           updated_by?: string | null
           vehicle_number?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "transporter_bill_trips_bill_id_fkey"
-            columns: ["bill_id"]
-            isOneToOne: false
-            referencedRelation: "transporter_bills"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bill_trips_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bill_trips_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bill_trips_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bill_trips_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-        ]
+        Relationships: []
       }
       transporter_bills: {
         Row: {
@@ -2578,36 +1878,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "transporter_bills_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bills_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bills_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transporter_bills_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-        ]
+        Relationships: []
       }
       transporters: {
         Row: {
@@ -2658,15 +1929,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "transporters_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       truck_trips: {
         Row: {
@@ -2741,127 +2004,7 @@ export type Database = {
           updated_by?: string | null
           vehicle_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "truck_trips_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_profit"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_item_id_fkey"
-            columns: ["order_item_id"]
-            isOneToOne: false
-            referencedRelation: "order_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_item_id_fkey"
-            columns: ["order_item_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_item_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "material_providers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "v_provider_payable"
-            referencedColumns: ["provider_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_purchase_id_fkey"
-            columns: ["purchase_id"]
-            isOneToOne: false
-            referencedRelation: "purchases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "construction_sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_stock_location_id_fkey"
-            columns: ["stock_location_id"]
-            isOneToOne: false
-            referencedRelation: "stock_locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "v_vehicle_shortage_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       user_permissions: {
         Row: {
@@ -2894,22 +2037,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "user_permissions_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_permissions_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       vehicles: {
         Row: {
@@ -2941,7 +2069,7 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vehicle_number: string
-          vehicle_number_normalized?: string | null
+          vehicle_number_normalized?: never
           vehicle_type?: string | null
         }
         Update: {
@@ -2957,39 +2085,10 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
           vehicle_number?: string
-          vehicle_number_normalized?: string | null
+          vehicle_number_normalized?: never
           vehicle_type?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "vehicles_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_default_driver_id_fkey"
-            columns: ["default_driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-        ]
+        Relationships: []
       }
       weight_records: {
         Row: {
@@ -3018,18 +2117,18 @@ export type Database = {
         }
         Insert: {
           business_id?: string
-          calculated_net?: number | null
+          calculated_net?: never
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           document_id?: string | null
           gross?: number | null
-          has_net_mismatch?: boolean | null
+          has_net_mismatch?: never
           id?: string
           location?: string | null
           measured_at: string
           measurement_method?: Database["public"]["Enums"]["measurement_method"]
-          net_quantity?: number | null
+          net_quantity?: never
           printed_net?: number | null
           record_type: Database["public"]["Enums"]["weight_record_type"]
           slip_number?: string | null
@@ -3042,18 +2141,18 @@ export type Database = {
         }
         Update: {
           business_id?: string
-          calculated_net?: number | null
+          calculated_net?: never
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           document_id?: string | null
           gross?: number | null
-          has_net_mismatch?: boolean | null
+          has_net_mismatch?: never
           id?: string
           location?: string | null
           measured_at?: string
           measurement_method?: Database["public"]["Enums"]["measurement_method"]
-          net_quantity?: number | null
+          net_quantity?: never
           printed_net?: number | null
           record_type?: Database["public"]["Enums"]["weight_record_type"]
           slip_number?: string | null
@@ -3064,108 +2163,23 @@ export type Database = {
           updated_by?: string | null
           vehicle_number?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "weight_records_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "weight_records_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "weight_records_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "truck_trips"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "weight_records_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_summary"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "weight_records_trip_id_fkey"
-            columns: ["trip_id"]
-            isOneToOne: false
-            referencedRelation: "v_trip_weights"
-            referencedColumns: ["trip_id"]
-          },
-        ]
-      }
-      whatsapp_messages: {
-        Row: {
-          body: string | null
-          business_id: string
-          created_at: string
-          created_by: string | null
-          from_phone: string
-          id: string
-          num_media: number
-          processing_status: Database["public"]["Enums"]["document_status"]
-          raw_payload: Json | null
-          received_at: string
-          sender_name: string | null
-          to_phone: string | null
-          twilio_message_sid: string
-          updated_at: string
-          updated_by: string | null
-        }
-        Insert: {
-          body?: string | null
-          business_id?: string
-          created_at?: string
-          created_by?: string | null
-          from_phone: string
-          id?: string
-          num_media?: number
-          processing_status?: Database["public"]["Enums"]["document_status"]
-          raw_payload?: Json | null
-          received_at?: string
-          sender_name?: string | null
-          to_phone?: string | null
-          twilio_message_sid: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Update: {
-          body?: string | null
-          business_id?: string
-          created_at?: string
-          created_by?: string | null
-          from_phone?: string
-          id?: string
-          num_media?: number
-          processing_status?: Database["public"]["Enums"]["document_status"]
-          raw_payload?: Json | null
-          received_at?: string
-          sender_name?: string | null
-          to_phone?: string | null
-          twilio_message_sid?: string
-          updated_at?: string
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "whatsapp_messages_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
+      v_customer_outstanding: {
+        Row: {
+          business_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          invoice_count: number | null
+          invoiced_amount: number | null
+          outstanding_amount: number | null
+          overdue_amount: number | null
+          received_amount: number | null
+        }
+        Relationships: []
+      }
       v_customer_stats: {
         Row: {
           active_orders: number | null
@@ -3214,6 +2228,67 @@ export type Database = {
         }
         Relationships: []
       }
+      v_order_profit: {
+        Row: {
+          business_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          estimated_profit: number | null
+          labour_cost: number | null
+          loading_unloading_cost: number | null
+          margin_pct: number | null
+          order_code: string | null
+          order_id: string | null
+          order_status: Database["public"]["Enums"]["order_status"] | null
+          other_expenses: number | null
+          profit_status: string | null
+          purchase_cost: number | null
+          sales_value: number | null
+          transport_cost: number | null
+          trip_count: number | null
+        }
+        Relationships: []
+      }
+      v_order_progress: {
+        Row: {
+          business_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          delivered_pct: number | null
+          delivered_qty: number | null
+          dispatched_qty: number | null
+          expected_delivery: string | null
+          material_id: string | null
+          material_name: string | null
+          order_code: string | null
+          order_date: string | null
+          order_id: string | null
+          order_item_id: string | null
+          order_status: Database["public"]["Enums"]["order_status"] | null
+          order_value: number | null
+          ordered_qty: number | null
+          pending_qty: number | null
+          selling_rate: number | null
+          site_id: string | null
+          site_name: string | null
+          trip_count: number | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: []
+      }
+      v_provider_payable: {
+        Row: {
+          bill_count: number | null
+          billed_amount: number | null
+          bills_needing_attention: number | null
+          business_id: string | null
+          paid_amount: number | null
+          payable_amount: number | null
+          provider_id: string | null
+          provider_name: string | null
+        }
+        Relationships: []
+      }
       v_provider_stats: {
         Row: {
           business_id: string | null
@@ -3257,6 +2332,22 @@ export type Database = {
         }
         Relationships: []
       }
+      v_stock_balance: {
+        Row: {
+          adjusted_qty: number | null
+          balance_qty: number | null
+          business_id: string | null
+          issued_qty: number | null
+          last_movement_date: string | null
+          material_id: string | null
+          material_name: string | null
+          received_qty: number | null
+          stock_location_id: string | null
+          stock_location_name: string | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: []
+      }
       v_stock_ledger: {
         Row: {
           balance_after: number | null
@@ -3275,6 +2366,19 @@ export type Database = {
           stock_location_id: string | null
           stock_location_name: string | null
           unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: []
+      }
+      v_transporter_payable: {
+        Row: {
+          bill_count: number | null
+          billed_amount: number | null
+          bills_needing_attention: number | null
+          business_id: string | null
+          paid_amount: number | null
+          payable_amount: number | null
+          transporter_id: string | null
+          transporter_name: string | null
         }
         Relationships: []
       }
@@ -3345,213 +2449,6 @@ export type Database = {
         }
         Relationships: []
       }
-      v_customer_outstanding: {
-        Row: {
-          business_id: string | null
-          customer_id: string | null
-          customer_name: string | null
-          invoice_count: number | null
-          invoiced_amount: number | null
-          outstanding_amount: number | null
-          overdue_amount: number | null
-          received_amount: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customers_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_order_profit: {
-        Row: {
-          business_id: string | null
-          customer_id: string | null
-          customer_name: string | null
-          estimated_profit: number | null
-          labour_cost: number | null
-          loading_unloading_cost: number | null
-          margin_pct: number | null
-          order_code: string | null
-          order_id: string | null
-          order_status: Database["public"]["Enums"]["order_status"] | null
-          other_expenses: number | null
-          profit_status: string | null
-          purchase_cost: number | null
-          sales_value: number | null
-          transport_cost: number | null
-          trip_count: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_orders_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-        ]
-      }
-      v_order_progress: {
-        Row: {
-          business_id: string | null
-          customer_id: string | null
-          customer_name: string | null
-          delivered_pct: number | null
-          delivered_qty: number | null
-          dispatched_qty: number | null
-          expected_delivery: string | null
-          material_id: string | null
-          material_name: string | null
-          order_code: string | null
-          order_date: string | null
-          order_id: string | null
-          order_item_id: string | null
-          order_status: Database["public"]["Enums"]["order_status"] | null
-          order_value: number | null
-          ordered_qty: number | null
-          pending_qty: number | null
-          selling_rate: number | null
-          site_id: string | null
-          site_name: string | null
-          trip_count: number | null
-          unit: Database["public"]["Enums"]["material_unit"] | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-          {
-            foreignKeyName: "customer_orders_site_id_customer_id_fkey"
-            columns: ["site_id", "customer_id"]
-            isOneToOne: false
-            referencedRelation: "construction_sites"
-            referencedColumns: ["id", "customer_id"]
-          },
-          {
-            foreignKeyName: "order_items_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "order_items_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_provider_payable: {
-        Row: {
-          bill_count: number | null
-          billed_amount: number | null
-          bills_needing_attention: number | null
-          business_id: string | null
-          paid_amount: number | null
-          payable_amount: number | null
-          provider_id: string | null
-          provider_name: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "material_providers_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_stock_balance: {
-        Row: {
-          adjusted_qty: number | null
-          balance_qty: number | null
-          business_id: string | null
-          issued_qty: number | null
-          last_movement_date: string | null
-          material_id: string | null
-          material_name: string | null
-          received_qty: number | null
-          stock_location_id: string | null
-          stock_location_name: string | null
-          unit: Database["public"]["Enums"]["material_unit"] | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "stock_movements_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_movements_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "stock_movements_stock_location_id_fkey"
-            columns: ["stock_location_id"]
-            isOneToOne: false
-            referencedRelation: "stock_locations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_transporter_payable: {
-        Row: {
-          bill_count: number | null
-          billed_amount: number | null
-          bills_needing_attention: number | null
-          business_id: string | null
-          paid_amount: number | null
-          payable_amount: number | null
-          transporter_id: string | null
-          transporter_name: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "transporters_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       v_trip_summary: {
         Row: {
           business_id: string | null
@@ -3567,9 +2464,7 @@ export type Database = {
           driver_name: string | null
           freight_amount: number | null
           id: string | null
-          investigation_outcome:
-            | Database["public"]["Enums"]["investigation_outcome"]
-            | null
+          investigation_outcome: Database["public"]["Enums"]["investigation_outcome"] | null
           loaded_at: string | null
           loading_net: number | null
           loading_net_mismatch: boolean | null
@@ -3588,9 +2483,7 @@ export type Database = {
           status: Database["public"]["Enums"]["trip_status"] | null
           stock_location_id: string | null
           tolerance: number | null
-          tolerance_status:
-            | Database["public"]["Enums"]["tolerance_status"]
-            | null
+          tolerance_status: Database["public"]["Enums"]["tolerance_status"] | null
           transporter_id: string | null
           transporter_name: string | null
           trip_code: string | null
@@ -3598,127 +2491,7 @@ export type Database = {
           vehicle_id: string | null
           vehicle_number: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_orders_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "v_customer_outstanding"
-            referencedColumns: ["customer_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_driver_id_fkey"
-            columns: ["driver_id"]
-            isOneToOne: false
-            referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_material_id_fkey"
-            columns: ["material_id"]
-            isOneToOne: false
-            referencedRelation: "materials"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "customer_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_profit"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "v_order_progress"
-            referencedColumns: ["order_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "material_providers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_provider_id_fkey"
-            columns: ["provider_id"]
-            isOneToOne: false
-            referencedRelation: "v_provider_payable"
-            referencedColumns: ["provider_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_purchase_id_fkey"
-            columns: ["purchase_id"]
-            isOneToOne: false
-            referencedRelation: "purchases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "construction_sites"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_stock_location_id_fkey"
-            columns: ["stock_location_id"]
-            isOneToOne: false
-            referencedRelation: "stock_locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "truck_trips_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "v_vehicle_shortage_stats"
-            referencedColumns: ["vehicle_id"]
-          },
-          {
-            foreignKeyName: "truck_trips_vehicle_id_fkey"
-            columns: ["vehicle_id"]
-            isOneToOne: false
-            referencedRelation: "vehicles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       v_trip_weights: {
         Row: {
@@ -3735,15 +2508,7 @@ export type Database = {
           loading_weight_id: string | null
           trip_id: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "truck_trips_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       v_vehicle_shortage_stats: {
         Row: {
@@ -3760,194 +2525,78 @@ export type Database = {
           vehicle_id: string | null
           vehicle_number: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "vehicles_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "transporters"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "vehicles_transporter_id_fkey"
-            columns: ["transporter_id"]
-            isOneToOne: false
-            referencedRelation: "v_transporter_payable"
-            referencedColumns: ["transporter_id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Functions: {
+      ai_reserve_call: { Args: { p_business_id: string }; Returns: boolean }
       app_fail: { Args: { p_message: string }; Returns: undefined }
+      apply_document_decision: { Args: { p_decision: Json; p_document_id: string }; Returns: string }
+      claim_document_jobs: { Args: { p_limit?: number }; Returns: Database["public"]["Tables"]["document_jobs"]["Row"][] }
+      correct_document_field: { Args: { p_document_id: string; p_field: string; p_reason: string; p_value: string }; Returns: undefined }
       create_customer: { Args: { p_customer: Json; p_site?: Json }; Returns: string }
+      create_document_from_upload: { Args: { p_business_id: string; p_document_type_hint?: string; p_file_name: string; p_mime_type: string; p_sha256: string; p_size_bytes: number; p_source: Database["public"]["Enums"]["document_intake_source"]; p_storage_path: string; p_trip_hint_id?: string; p_uploaded_by?: string; p_uploaded_by_label?: string }; Returns: Json }
       create_material: { Args: { p_material: Json }; Returns: string }
       create_order: { Args: { p_items: Json; p_order: Json }; Returns: Json }
-      create_provider: {
-        Args: { p_material_ids?: string[]; p_provider: Json }
-        Returns: string
-      }
+      create_provider: { Args: { p_material_ids?: string[]; p_provider: Json }; Returns: string }
       create_purchase: { Args: { p_items: Json; p_purchase: Json }; Returns: Json }
-      create_trip: {
-        Args: { p_delivery?: Json; p_loading: Json; p_trip: Json }
-        Returns: Json
-      }
+      create_trip: { Args: { p_delivery?: Json; p_loading: Json; p_trip: Json }; Returns: Json }
       create_vehicle: { Args: { p_driver?: Json; p_vehicle: Json }; Returns: string }
-      record_trip_investigation: {
-        Args: {
-          p_notes: string
-          p_outcome: Database["public"]["Enums"]["investigation_outcome"]
-          p_status?: Database["public"]["Enums"]["trip_status"]
-          p_trip_id: string
-        }
-        Returns: undefined
-      }
-      save_weight_record: {
-        Args: {
-          p_reason?: string
-          p_record_type: Database["public"]["Enums"]["weight_record_type"]
-          p_trip_id: string
-          p_values: Json
-        }
-        Returns: undefined
-      }
-      set_material_tolerances: { Args: { p_values: Json }; Returns: number }
-      update_order: {
-        Args: {
-          p_items: Json
-          p_order: Json
-          p_order_id: string
-          p_reason?: string
-        }
-        Returns: Json
-      }
       current_business_id: { Args: never; Returns: string }
-      generate_code: {
-        Args: { p_prefix: string; p_seq: unknown; p_width: number }
-        Returns: string
-      }
-      has_permission: {
-        Args: { p_key: Database["public"]["Enums"]["permission_key"] }
-        Returns: boolean
-      }
+      defer_document_job: { Args: { p_job_id: string; p_note: string; p_until: string }; Returns: undefined }
+      document_effective_fields: { Args: { p_document_id: string }; Returns: Json }
+      document_for_user: { Args: { p_document_id: string }; Returns: Database["public"]["Tables"]["documents"]["Row"] }
+      enqueue_document: { Args: { p_document_id: string }; Returns: string }
+      finish_document_job: { Args: { p_error?: string; p_job_id: string }; Returns: Database["public"]["Enums"]["document_job_status"] }
+      generate_code: { Args: { p_prefix: string; p_seq: unknown; p_width: number }; Returns: string }
+      has_permission: { Args: { p_key: Database["public"]["Enums"]["permission_key"] }; Returns: boolean }
       is_active_user: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
-      recalculate_invoice_totals: {
-        Args: { p_invoice_id: string }
-        Returns: undefined
-      }
-      tolerance_status_for: {
-        Args: { p_difference: number; p_tolerance: number }
-        Returns: Database["public"]["Enums"]["tolerance_status"]
-      }
+      kick_document_worker: { Args: never; Returns: undefined }
+      mark_document_duplicate: { Args: { p_document_id: string; p_original_id: string; p_reason: string }; Returns: undefined }
+      mark_notifications_read: { Args: { p_ids: string[] }; Returns: undefined }
+      recalculate_invoice_totals: { Args: { p_invoice_id: string }; Returns: undefined }
+      record_document_extraction: { Args: { p_document_id: string; p_result: Json }; Returns: undefined }
+      record_document_weight: { Args: { p_document_id: string; p_reason: string; p_record_type: Database["public"]["Enums"]["weight_record_type"]; p_trip_id: string }; Returns: string }
+      record_trip_investigation: { Args: { p_notes: string; p_outcome: Database["public"]["Enums"]["investigation_outcome"]; p_status?: Database["public"]["Enums"]["trip_status"]; p_trip_id: string }; Returns: undefined }
+      register_uploaded_document: { Args: { p_document_type_hint?: string; p_file_name: string; p_mime_type: string; p_sha256: string; p_size_bytes: number; p_storage_path: string; p_trip_hint_id?: string; p_uploaded_by_label?: string }; Returns: Json }
+      reject_document: { Args: { p_document_id: string; p_reason: string }; Returns: undefined }
+      reprocess_document: { Args: { p_document_id: string }; Returns: undefined }
+      require_permission: { Args: { p_key: Database["public"]["Enums"]["permission_key"] }; Returns: undefined }
+      review_attach_document: { Args: { p_document_id: string; p_reason: string; p_record_type: Database["public"]["Enums"]["weight_record_type"]; p_trip_id: string }; Returns: undefined }
+      review_create_trip_from_document: { Args: { p_document_id: string; p_reason: string; p_trip: Json }; Returns: Json }
+      save_weight_record: { Args: { p_reason?: string; p_record_type: Database["public"]["Enums"]["weight_record_type"]; p_trip_id: string; p_values: Json }; Returns: undefined }
+      set_material_tolerances: { Args: { p_values: Json }; Returns: number }
+      tolerance_status_for: { Args: { p_difference: number; p_tolerance: number }; Returns: Database["public"]["Enums"]["tolerance_status"] }
+      update_order: { Args: { p_items: Json; p_order: Json; p_order_id: string; p_reason?: string }; Returns: Json }
     }
     Enums: {
-      ai_status:
-        | "pending"
-        | "processing"
-        | "succeeded"
-        | "needs_review"
-        | "failed"
+      ai_status: "pending" | "processing" | "succeeded" | "needs_review" | "failed"
       audit_action: "INSERT" | "UPDATE" | "DELETE"
       bill_type: "provider_bill" | "transporter_bill" | "customer_invoice"
       delivery_mode: "direct_to_site" | "stock_yard"
-      document_source: "whatsapp" | "manual"
-      document_status:
-        | "received"
-        | "processing"
-        | "information_extracted"
-        | "matched"
-        | "automatically_recorded"
-        | "needs_review"
-        | "failed"
-        | "duplicate"
-      document_type:
-        | "weighbridge_slip"
-        | "loading_slip"
-        | "unloading_slip"
-        | "provider_bill"
-        | "transporter_bill"
-        | "delivery_photo"
-        | "payment_receipt"
-        | "other"
-      expense_category:
-        | "labour"
-        | "loading"
-        | "unloading"
-        | "fuel"
-        | "toll"
-        | "waiting"
-        | "other"
+      document_intake_source: "staff_upload" | "driver_link"
+      document_job_status: "queued" | "running" | "done" | "failed"
+      document_status: "received" | "processing" | "information_extracted" | "matched" | "automatically_recorded" | "needs_review" | "failed" | "duplicate" | "rejected"
+      document_type: "weighbridge_slip" | "loading_slip" | "unloading_slip" | "provider_bill" | "transporter_bill" | "delivery_photo" | "payment_receipt" | "other"
+      expense_category: "labour" | "loading" | "unloading" | "fuel" | "toll" | "waiting" | "other"
       gst_mode: "cgst_sgst" | "igst" | "none"
-      investigation_outcome:
-        | "under_investigation"
-        | "weighbridge_calibration_difference"
-        | "moisture_or_spillage_loss"
-        | "site_measurement_difference"
-        | "recovered_from_transporter"
-        | "accepted_as_normal_loss"
+      investigation_outcome: "under_investigation" | "weighbridge_calibration_difference" | "moisture_or_spillage_loss" | "site_measurement_difference" | "recovered_from_transporter" | "accepted_as_normal_loss"
       invoice_status: "draft" | "issued" | "cancelled"
       material_unit: "MT" | "CFT" | "BRASS" | "CUM" | "TRIP" | "BAG" | "NOS"
-      measurement_method:
-        | "weighbridge"
-        | "site_measurement"
-        | "count"
-        | "manual_entry"
-      order_status:
-        | "draft"
-        | "confirmed"
-        | "in_progress"
-        | "completed"
-        | "on_hold"
-        | "cancelled"
+      measurement_method: "weighbridge" | "site_measurement" | "count" | "manual_entry"
+      order_status: "draft" | "confirmed" | "in_progress" | "completed" | "on_hold" | "cancelled"
       party_type: "customer" | "provider" | "transporter"
       payment_direction: "incoming" | "outgoing"
       payment_mode: "upi" | "bank_transfer" | "cheque" | "cash"
-      permission_key:
-        | "view_records"
-        | "manage_orders"
-        | "review_documents"
-        | "manage_trips"
-        | "correct_extracted"
-        | "verify_bills"
-        | "record_payments"
-        | "view_financial_reports"
-      purchase_status:
-        | "recorded"
-        | "needs_verification"
-        | "billed"
-        | "cancelled"
-      recon_status:
-        | "unreconciled"
-        | "matched"
-        | "mismatch"
-        | "disputed"
-        | "correction_requested"
-        | "difference_approved"
-        | "reconciled"
-      record_source: "whatsapp" | "manual"
-      review_reason:
-        | "low_confidence"
-        | "missing_essential_info"
-        | "multiple_possible_matches"
-        | "conflicting_weight_values"
-        | "financial_discrepancy"
+      permission_key: "view_records" | "manage_orders" | "review_documents" | "manage_trips" | "correct_extracted" | "verify_bills" | "record_payments" | "view_financial_reports"
+      purchase_status: "recorded" | "needs_verification" | "billed" | "cancelled"
+      recon_status: "unreconciled" | "matched" | "mismatch" | "disputed" | "correction_requested" | "difference_approved" | "reconciled"
+      record_source: "document" | "manual"
+      review_reason: "low_confidence" | "missing_essential_info" | "multiple_possible_matches" | "conflicting_weight_values" | "financial_discrepancy" | "no_match" | "vehicle_mismatch"
       stock_movement_type: "received" | "issued" | "adjustment"
       tolerance_status: "normal" | "needs_verification" | "confirmed_shortage"
-      trip_status:
-        | "loaded"
-        | "in_transit"
-        | "delivered"
-        | "needs_verification"
-        | "confirmed_shortage"
-        | "cancelled"
+      trip_status: "loaded" | "in_transit" | "delivered" | "needs_verification" | "confirmed_shortage" | "cancelled"
       user_role: "owner" | "employee"
       weight_record_type: "loading" | "delivery"
     }
@@ -4077,117 +2726,32 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      ai_status: [
-        "pending",
-        "processing",
-        "succeeded",
-        "needs_review",
-        "failed",
-      ],
+      ai_status: ["pending", "processing", "succeeded", "needs_review", "failed"],
       audit_action: ["INSERT", "UPDATE", "DELETE"],
       bill_type: ["provider_bill", "transporter_bill", "customer_invoice"],
       delivery_mode: ["direct_to_site", "stock_yard"],
-      document_source: ["whatsapp", "manual"],
-      document_status: [
-        "received",
-        "processing",
-        "information_extracted",
-        "matched",
-        "automatically_recorded",
-        "needs_review",
-        "failed",
-        "duplicate",
-      ],
-      document_type: [
-        "weighbridge_slip",
-        "loading_slip",
-        "unloading_slip",
-        "provider_bill",
-        "transporter_bill",
-        "delivery_photo",
-        "payment_receipt",
-        "other",
-      ],
-      expense_category: [
-        "labour",
-        "loading",
-        "unloading",
-        "fuel",
-        "toll",
-        "waiting",
-        "other",
-      ],
+      document_intake_source: ["staff_upload", "driver_link"],
+      document_job_status: ["queued", "running", "done", "failed"],
+      document_status: ["received", "processing", "information_extracted", "matched", "automatically_recorded", "needs_review", "failed", "duplicate", "rejected"],
+      document_type: ["weighbridge_slip", "loading_slip", "unloading_slip", "provider_bill", "transporter_bill", "delivery_photo", "payment_receipt", "other"],
+      expense_category: ["labour", "loading", "unloading", "fuel", "toll", "waiting", "other"],
       gst_mode: ["cgst_sgst", "igst", "none"],
-      investigation_outcome: [
-        "under_investigation",
-        "weighbridge_calibration_difference",
-        "moisture_or_spillage_loss",
-        "site_measurement_difference",
-        "recovered_from_transporter",
-        "accepted_as_normal_loss",
-      ],
+      investigation_outcome: ["under_investigation", "weighbridge_calibration_difference", "moisture_or_spillage_loss", "site_measurement_difference", "recovered_from_transporter", "accepted_as_normal_loss"],
       invoice_status: ["draft", "issued", "cancelled"],
       material_unit: ["MT", "CFT", "BRASS", "CUM", "TRIP", "BAG", "NOS"],
-      measurement_method: [
-        "weighbridge",
-        "site_measurement",
-        "count",
-        "manual_entry",
-      ],
-      order_status: [
-        "draft",
-        "confirmed",
-        "in_progress",
-        "completed",
-        "on_hold",
-        "cancelled",
-      ],
+      measurement_method: ["weighbridge", "site_measurement", "count", "manual_entry"],
+      order_status: ["draft", "confirmed", "in_progress", "completed", "on_hold", "cancelled"],
       party_type: ["customer", "provider", "transporter"],
       payment_direction: ["incoming", "outgoing"],
       payment_mode: ["upi", "bank_transfer", "cheque", "cash"],
-      permission_key: [
-        "view_records",
-        "manage_orders",
-        "review_documents",
-        "manage_trips",
-        "correct_extracted",
-        "verify_bills",
-        "record_payments",
-        "view_financial_reports",
-      ],
-      purchase_status: [
-        "recorded",
-        "needs_verification",
-        "billed",
-        "cancelled",
-      ],
-      recon_status: [
-        "unreconciled",
-        "matched",
-        "mismatch",
-        "disputed",
-        "correction_requested",
-        "difference_approved",
-        "reconciled",
-      ],
-      record_source: ["whatsapp", "manual"],
-      review_reason: [
-        "low_confidence",
-        "missing_essential_info",
-        "multiple_possible_matches",
-        "conflicting_weight_values",
-        "financial_discrepancy",
-      ],
+      permission_key: ["view_records", "manage_orders", "review_documents", "manage_trips", "correct_extracted", "verify_bills", "record_payments", "view_financial_reports"],
+      purchase_status: ["recorded", "needs_verification", "billed", "cancelled"],
+      recon_status: ["unreconciled", "matched", "mismatch", "disputed", "correction_requested", "difference_approved", "reconciled"],
+      record_source: ["document", "manual"],
+      review_reason: ["low_confidence", "missing_essential_info", "multiple_possible_matches", "conflicting_weight_values", "financial_discrepancy", "no_match", "vehicle_mismatch"],
       stock_movement_type: ["received", "issued", "adjustment"],
       tolerance_status: ["normal", "needs_verification", "confirmed_shortage"],
-      trip_status: [
-        "loaded",
-        "in_transit",
-        "delivered",
-        "needs_verification",
-        "confirmed_shortage",
-        "cancelled",
-      ],
+      trip_status: ["loaded", "in_transit", "delivered", "needs_verification", "confirmed_shortage", "cancelled"],
       user_role: ["owner", "employee"],
       weight_record_type: ["loading", "delivery"],
     },

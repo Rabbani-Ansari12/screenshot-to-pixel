@@ -14,6 +14,7 @@ import type {
 import type { Json, Tables } from "@/lib/supabase";
 import { AppError, check, rows, toAppError, unwrapMaybe } from "./supabase/errors";
 import { sb } from "./supabase/fetch";
+import { todayIST } from "@/lib/format";
 import { unitFromDb, unitToDb } from "./supabase/mappers";
 
 // ---------- Employees ----------
@@ -244,6 +245,7 @@ const widthOf = (format: string) => {
 export function toAppSettings(
   row: SettingsRow,
   business: Tables<"businesses"> | null,
+  callsToday = 0,
 ): AppSettings {
   const gst = obj(row.gst_config);
   const profile = obj(row.business_profile);
@@ -273,8 +275,14 @@ export function toAppSettings(
     autoProcessThreshold: Math.round(Number(row.auto_process_confidence_threshold) * 100),
     authoritativeWeight: row.authoritative_weight === "loading" ? "Loading" : "Delivery",
     enabledUnits: row.enabled_units.map(unitFromDb),
-    // WhatsApp and backups are not configured from the database yet.
-    whatsapp: { connected: false, provider: "Twilio WhatsApp", number: "", lastMessageAt: "" },
+    ai: {
+      dailyCallCap: row.ai_daily_call_cap,
+      callsToday,
+      netWeightTolerance: Number(row.net_weight_tolerance),
+      matchThreshold: Math.round(Number(row.match_threshold) * 100),
+      matchMargin: Math.round(Number(row.match_margin) * 100),
+      matchWindowHours: row.match_window_hours,
+    },
     notifications: {
       reviewQueue: flag("review_queue", true),
       shortages: flag("shortages", true),
@@ -300,11 +308,12 @@ async function settingsRow() {
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  const [row, business] = await Promise.all([
+  const [row, business, usage] = await Promise.all([
     settingsRow(),
     sb().from("businesses").select("*").maybeSingle(),
+    sb().from("ai_usage_daily").select("calls").eq("day", todayIST()).maybeSingle(),
   ]);
-  return toAppSettings(row, unwrapMaybe(business));
+  return toAppSettings(row, unwrapMaybe(business), unwrapMaybe(usage)?.calls ?? 0);
 }
 
 /** Owner only (RLS). Only the fields present in the patch are written. */
@@ -335,6 +344,13 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
     update.auto_process_confidence_threshold = Math.round(patch.autoProcessThreshold) / 100;
   if (patch.authoritativeWeight)
     update.authoritative_weight = patch.authoritativeWeight === "Loading" ? "loading" : "delivery";
+  if (patch.ai) {
+    update.ai_daily_call_cap = Math.round(patch.ai.dailyCallCap);
+    update.net_weight_tolerance = patch.ai.netWeightTolerance;
+    update.match_threshold = patch.ai.matchThreshold / 100;
+    update.match_margin = patch.ai.matchMargin / 100;
+    update.match_window_hours = Math.round(patch.ai.matchWindowHours);
+  }
   if (patch.enabledUnits)
     update.enabled_units = patch.enabledUnits.map((u) => unitToDb(u as never));
   if (patch.notifications)
@@ -368,28 +384,24 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
 }
 
 // ---------- Notifications (exceptions only) ----------
+/** Exceptions for the signed-in user (RLS filters by permission). */
 export async function listNotifications(): Promise<AppNotification[]> {
-  const trips = rows(
-    await sb()
-      .from("v_trip_list")
-      .select(
-        "trip_code, status, delivered_at, loaded_at, vehicle_number, site_name, investigation_outcome",
-      )
-      .in("status", ["needs_verification", "confirmed_shortage"])
-      .is("investigation_outcome", null)
-      .order("sort_at", { ascending: false })
-      .limit(10),
-  );
-  return trips.map((t) => ({
-    id: `N-${t.trip_code ?? ""}`,
-    at: t.delivered_at ?? t.loaded_at ?? new Date().toISOString(),
-    title:
-      t.status === "confirmed_shortage"
-        ? "Delivery difference above 2× tolerance"
-        : "Delivery difference above tolerance",
-    detail: `${t.trip_code ?? ""} · ${t.vehicle_number ?? ""} · ${t.site_name ?? ""}`,
-    href: "/shortages",
-    severity: t.status === "confirmed_shortage" ? "danger" : "warning",
-    read: false,
+  const [{ data: session }, list] = await Promise.all([
+    sb().auth.getSession(),
+    sb().from("notifications").select("*").order("created_at", { ascending: false }).limit(50),
+  ]);
+  const uid = session.session?.user.id ?? "";
+  return rows(list).map((n) => ({
+    id: n.id,
+    at: n.created_at,
+    title: n.title,
+    detail: n.detail ?? "",
+    href: n.href ?? "/",
+    severity: n.severity === "danger" ? "danger" : n.severity === "info" ? "info" : "warning",
+    read: n.read_by.includes(uid),
   }));
+}
+
+export async function markNotificationsRead(ids: string[]): Promise<void> {
+  if (ids.length) check(await sb().rpc("mark_notifications_read", { p_ids: ids }));
 }

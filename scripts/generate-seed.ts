@@ -6,7 +6,7 @@
  *
  * The seed is idempotent (fixed UUIDs + ON CONFLICT DO NOTHING), attaches to the existing
  * business if there is one, and goes through the normal triggers (stock, delivery records, audit).
- * Documents / WhatsApp messages are not seeded because they need real files in Storage.
+ * Documents are not seeded because they need real files in Storage.
  */
 import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
@@ -435,7 +435,7 @@ const weight = (
   s(plate(vehicleId)),
   s(r.at),
   s(r.location),
-  r.autoFilled ? "'whatsapp'" : "'manual'",
+  r.autoFilled ? "'document'" : "'manual'",
   r.source === "Weighbridge"
     ? "'weighbridge'"
     : r.source === "Site Measurement"

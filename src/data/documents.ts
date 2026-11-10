@@ -8,7 +8,6 @@ import type {
   ReviewReason,
   TimelineEvent,
   Trip,
-  WhatsAppMessage,
 } from "@/types";
 import { drivers, materials, providers, sites, transporters, vehicles } from "./masters";
 import { trips } from "./operations";
@@ -32,7 +31,7 @@ const plus = (iso: string, minutes: number) => {
 
 function timeline(status: ProcessingStatus, receivedAt: string): TimelineEvent[] {
   const steps: TimelineEvent[] = [
-    { label: "Received on WhatsApp", at: receivedAt, state: "done" },
+    { label: "Uploaded", at: receivedAt, state: "done" },
     { label: "Information extracted", at: plus(receivedAt, 1), state: "done" },
     { label: "Matched to record", at: plus(receivedAt, 1), state: "done" },
     { label: "Recorded automatically", at: plus(receivedAt, 2), state: "done" },
@@ -111,7 +110,7 @@ interface Draft extends Omit<DocumentRecord, "id" | "timeline"> {
 const drafts: Draft[] = [];
 
 const recentTrips = trips.filter(
-  (t) => t.createdVia === "WhatsApp" && t.loading.at >= "2026-11-01",
+  (t) => t.createdVia === "Document" && t.loading.at >= "2026-11-01",
 );
 const openTrips = trips.filter((t) => !t.delivery);
 const reviewTrips = new Set(openTrips.slice(0, 6).map((t) => t.id));
@@ -135,8 +134,7 @@ recentTrips.forEach((trip, i) => {
     fileName: `IMG-${trip.loading.at.slice(0, 10).replaceAll("-", "")}-WA${pad(rng.int(1, 9999), 4)}.jpg`,
     pages: 1,
     senderName: driver.name,
-    senderPhone: driver.phone,
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: plus(trip.loading.at, rng.int(4, 18)),
     status: loadStatus,
     confidence: loadStatus === "Processing" ? 0 : loadConfidence,
@@ -146,7 +144,6 @@ recentTrips.forEach((trip, i) => {
         ? null
         : { type: "Trip", id: trip.id, label: trip.id },
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "",
@@ -164,8 +161,7 @@ recentTrips.forEach((trip, i) => {
       fileName: `IMG-${trip.delivery.at.slice(0, 10).replaceAll("-", "")}-WA${pad(rng.int(1, 9999), 4)}.jpg`,
       pages: 1,
       senderName: site.contactName,
-      senderPhone: site.contactPhone,
-      source: "WhatsApp",
+      source: "Staff Upload",
       receivedAt: plus(trip.delivery.at, rng.int(5, 25)),
       status: "Automatically Recorded",
       confidence: conf,
@@ -183,7 +179,6 @@ recentTrips.forEach((trip, i) => {
             },
           ]
         : [],
-      messageId: null,
       duplicateOf: null,
       reviewReason: null,
       note: "",
@@ -197,8 +192,7 @@ recentTrips.forEach((trip, i) => {
         fileName: `IMG-${trip.delivery.at.slice(0, 10).replaceAll("-", "")}-WA${pad(rng.int(1, 9999), 4)}.jpg`,
         pages: 1,
         senderName: site.contactName,
-        senderPhone: site.contactPhone,
-        source: "WhatsApp",
+        source: "Staff Upload",
         receivedAt: plus(trip.delivery.at, rng.int(26, 30)),
         status: "Matched",
         confidence: rng.int(88, 95),
@@ -214,7 +208,6 @@ recentTrips.forEach((trip, i) => {
         ],
         link: { type: "Trip", id: trip.id, label: trip.id },
         corrections: [],
-        messageId: null,
         duplicateOf: null,
         reviewReason: null,
         note: "",
@@ -283,15 +276,13 @@ function reviewSlip(
     fileName: `IMG-${TODAY.replaceAll("-", "")}-WA${pad(rng.int(1, 9999), 4)}.jpg`,
     pages: 1,
     senderName: opts.senderSite === false ? driver.name : site.contactName,
-    senderPhone: opts.senderSite === false ? driver.phone : site.contactPhone,
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(TODAY, rng.int(8, 11), rng.int(0, 59)),
     status: "Needs Review",
     confidence: opts.confidence,
     fields,
     link: null,
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: opts.reason,
     note: opts.summary,
@@ -430,15 +421,13 @@ drafts.push(
     fileName: `IMG-${TODAY.replaceAll("-", "")}-WA0912.jpg`,
     pages: 1,
     senderName: "Amol Shinde",
-    senderPhone: "+91 98220 44120",
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(addDays(TODAY, -1), 18, 42),
     status: "Failed",
     confidence: 0,
     fields: [],
     link: null,
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "Image too dark and blurred to read. Ask the sender for a clearer photo or upload manually.",
@@ -448,15 +437,13 @@ drafts.push(
     fileName: "Statement_Oct_2026.pdf",
     pages: 3,
     senderName: "Harpreet Singh",
-    senderPhone: "+91 98231 80550",
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(addDays(TODAY, -2), 20, 5),
     status: "Failed",
     confidence: 0,
     fields: [],
     link: null,
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "PDF is password-protected.",
@@ -466,15 +453,13 @@ drafts.push(
     fileName: `IMG-${TODAY.replaceAll("-", "")}-WA1288.jpg`,
     pages: 1,
     senderName: "Sunita Iyer",
-    senderPhone: "+91 98231 40782",
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(TODAY, 11, 52),
     status: "Received",
     confidence: 0,
     fields: [],
     link: null,
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "",
@@ -484,8 +469,7 @@ drafts.push(
     fileName: `IMG-${TODAY.replaceAll("-", "")}-WA1301.jpg`,
     pages: 1,
     senderName: "Dattatray Kale",
-    senderPhone: "+91 98224 70215",
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(TODAY, 12, 18),
     status: "Information Extracted",
     confidence: 90,
@@ -501,7 +485,6 @@ drafts.push(
     ],
     link: null,
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "Looking for a matching trip…",
@@ -511,15 +494,13 @@ drafts.push(
     fileName: `IMG-${TODAY.replaceAll("-", "")}-WA1290.jpg`,
     pages: 1,
     senderName: driverMap.get(lastTrip.driverId)?.name ?? "Driver",
-    senderPhone: driverMap.get(lastTrip.driverId)?.phone ?? "",
-    source: "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(TODAY, 12, 6),
     status: "Received",
     confidence: 0,
     fields: [],
     link: null,
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "",
@@ -538,8 +519,7 @@ octBills.forEach((bill, i) => {
     fileName: `${bill.billNo.replaceAll("/", "_")}.pdf`,
     pages: bill.lines.length > 12 ? 2 : 1,
     senderName: party?.contactName ?? "",
-    senderPhone: party?.phone ?? "",
-    source: manual ? "Manual Upload" : "WhatsApp",
+    source: "Staff Upload",
     receivedAt: at(bill.date, 10 + (i % 6), 15 + i),
     status: "Automatically Recorded",
     confidence: rng.int(90, 97),
@@ -562,7 +542,6 @@ octBills.forEach((bill, i) => {
       label: bill.billNo,
     },
     corrections: [],
-    messageId: null,
     duplicateOf: null,
     reviewReason: null,
     note: "",
@@ -580,8 +559,7 @@ payments
       fileName: `Receipt_${p.reference.replaceAll(" ", "_").replaceAll("/", "_")}.jpg`,
       pages: 1,
       senderName: "Accounts team",
-      senderPhone: "+91 98220 41031",
-      source: "WhatsApp",
+      source: "Staff Upload",
       receivedAt: at(p.date, 15, 10),
       status: "Automatically Recorded",
       confidence: 95,
@@ -593,7 +571,6 @@ payments
       ],
       link: { type: "Payment", id: p.id, label: p.id },
       corrections: [],
-      messageId: null,
       duplicateOf: null,
       reviewReason: null,
       note: "",
@@ -668,76 +645,3 @@ export const reviewItems: ReviewItem[] = [
       };
     }),
 ];
-
-// ---------- WhatsApp messages ----------
-const texts: Record<DocumentType, string[]> = {
-  "Weighbridge Slip": [
-    "Loading done, slip attached.",
-    "Kata slip bhej raha hoon.",
-    "Truck loaded, weighbridge slip.",
-  ],
-  "Loading Slip": ["Loading slip for today's trip.", "Challan attached."],
-  "Unloading Slip": [
-    "Material received at site. Unloading slip attached.",
-    "Site weighbridge slip.",
-    "Received ok, slip attached.",
-  ],
-  "Delivery Photo": ["Photo of truck at site.", "Unloading photo."],
-  "Provider Bill": ["Bill for last month's supply.", "Please find our invoice attached."],
-  "Transporter Bill": ["Monthly transport bill.", "Trip bill for October."],
-  "Payment Receipt": ["Payment done, receipt attached.", "NEFT done today."],
-  Other: ["Statement attached."],
-};
-const docsAsc = [...documents].reverse().filter((d) => d.source === "WhatsApp");
-export const whatsappMessages: WhatsAppMessage[] = [];
-docsAsc.forEach((doc) => {
-  const prev = whatsappMessages[whatsappMessages.length - 1];
-  if (
-    prev &&
-    prev.phone === doc.senderPhone &&
-    Math.abs(Date.parse(doc.receivedAt) - Date.parse(prev.at)) < 10 * 60_000
-  ) {
-    prev.documentIds.push(doc.id);
-    doc.messageId = prev.id;
-    return;
-  }
-  const id = `MSG-${pad(8801 + whatsappMessages.length, 5)}`;
-  doc.messageId = id;
-  whatsappMessages.push({
-    id,
-    senderName: doc.senderName,
-    phone: doc.senderPhone,
-    at: doc.receivedAt,
-    text: rng.pick(texts[doc.type]),
-    documentIds: [doc.id],
-    status: doc.status,
-  });
-});
-[
-  {
-    senderName: "Ramesh Jadhav",
-    phone: "+91 98221 47018",
-    at: at(TODAY, 7, 41),
-    text: "Truck left the quarry, reaching site by 10.",
-  },
-  {
-    senderName: "Hemant Ghule",
-    phone: "+91 98811 23409",
-    at: at(addDays(TODAY, -1), 17, 20),
-    text: "Rate revision from 1st Dec, will share letter.",
-  },
-  {
-    senderName: "Sunil Wagh",
-    phone: "+91 98221 10450",
-    at: at(addDays(TODAY, -2), 9, 5),
-    text: "Two trucks available tomorrow for Wagholi.",
-  },
-].forEach((m, i) =>
-  whatsappMessages.push({
-    id: `MSG-${pad(9901 + i, 5)}`,
-    ...m,
-    documentIds: [],
-    status: "Received",
-  }),
-);
-whatsappMessages.sort((a, b) => b.at.localeCompare(a.at));

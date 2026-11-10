@@ -62,7 +62,7 @@ function ReviewCard({ item }: { item: ReviewItemView }) {
         <div className="min-w-0 flex-1">
           <p className="font-medium leading-snug">{item.title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {item.id} ·{" "}
+            {item.document?.ref ?? item.id} ·{" "}
             {item.document
               ? `${item.document.type} from ${item.document.senderName}`
               : "Bill reconciliation"}{" "}

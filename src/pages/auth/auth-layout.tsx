@@ -14,7 +14,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
         <div className="relative mt-auto max-w-md">
           <h2 className="font-display text-3xl font-extrabold leading-tight">
-            Slips arrive on WhatsApp. Trips record themselves.
+            Upload a slip. AI reads it and records the trip.
           </h2>
           <p className="mt-3 text-sidebar-foreground/70">
             You only step in when something doesn't add up.

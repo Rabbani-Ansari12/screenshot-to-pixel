@@ -100,7 +100,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Material supply, transport, delivery and accounts — automated from WhatsApp documents.",
+          "Material supply, transport, delivery and accounts — automated from uploaded documents.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

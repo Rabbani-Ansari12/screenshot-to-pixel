@@ -18,9 +18,10 @@ export type ProcessingStatus =
   | "Automatically Recorded"
   | "Needs Review"
   | "Failed"
-  | "Duplicate";
+  | "Duplicate"
+  | "Rejected";
 
-export type DocumentSource = "WhatsApp" | "Manual Upload";
+export type DocumentSource = "Staff Upload" | "Driver Link";
 
 export interface ExtractedField {
   key: string;
@@ -52,15 +53,19 @@ export type ReviewReason =
   | "Missing essential info"
   | "Multiple possible matches"
   | "Conflicting weight values"
-  | "Financial discrepancy";
+  | "Financial discrepancy"
+  | "No match"
+  | "Vehicle mismatch";
 
 export interface DocumentRecord {
   id: ID;
+  /** Short display reference (live documents have uuid ids). */
+  ref?: string;
   type: DocumentType;
   fileName: string;
   pages: number;
+  /** Who uploaded it (or the name typed on the upload page, e.g. a driver). */
   senderName: string;
-  senderPhone: string;
   source: DocumentSource;
   receivedAt: ISODate;
   status: ProcessingStatus;
@@ -70,10 +75,16 @@ export interface DocumentRecord {
   link: DocumentLink | null;
   timeline: TimelineEvent[];
   corrections: Correction[];
-  messageId: ID | null;
   duplicateOf: ID | null;
   reviewReason: ReviewReason | null;
   note: string;
+  /** Signed URL of the original file (live documents). */
+  fileUrl?: string | null;
+  mimeType?: string | null;
+  /** Trip the uploader said this belongs to (verified by the matcher). */
+  tripHint?: { id: ID; label: string } | null;
+  /** Why processing is waiting or failed (AI limit, AI not configured, error). */
+  processingNote?: string | null;
 }
 
 export interface MatchCriteria {
@@ -84,10 +95,21 @@ export interface MatchCriteria {
   destination: boolean;
 }
 
+export interface CriterionScore {
+  criterion: string;
+  score: number;
+  weight: number;
+  applicable: boolean;
+  detail: string;
+}
+
 export interface MatchCandidate {
   tripId: ID;
   score: number;
   criteria: MatchCriteria;
+  /** Per-criterion breakdown from the matching engine (live data). */
+  breakdown?: CriterionScore[];
+  recordType?: "loading" | "delivery";
 }
 
 export interface WeightConflict {
@@ -116,14 +138,4 @@ export interface ReviewItem {
   weightConflict: WeightConflict | null;
   financial: FinancialDiscrepancy | null;
   status: ReviewStatus;
-}
-
-export interface WhatsAppMessage {
-  id: ID;
-  senderName: string;
-  phone: string;
-  at: ISODate;
-  text: string;
-  documentIds: ID[];
-  status: ProcessingStatus;
 }

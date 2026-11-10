@@ -28,7 +28,6 @@ import { DocumentsPage } from "@/pages/documents/documents-page";
 import { DocumentDetailPage } from "@/pages/documents/document-detail-page";
 import { ReviewPage } from "@/pages/review/review-page";
 import { ReviewDetailPage } from "@/pages/review/review-detail-page";
-import { WhatsAppPage } from "@/pages/whatsapp-page";
 import { OrdersPage } from "@/pages/orders/orders-page";
 import { OrderFormPage } from "@/pages/orders/order-form-page";
 import { OrderDetailPage } from "@/pages/orders/order-detail-page";
@@ -100,13 +99,12 @@ const PAGES: [string, RegExp, () => ReactNode][] = [
   ["/", /Good afternoon/, () => <DashboardPage />],
   ["/documents", /Document Inbox/, () => <DocumentsPage />],
   [
-    "/documents/DOC-2026-1201",
+    `/documents/${ID.docRecorded}`,
     /Processing timeline/,
-    () => <DocumentDetailPage documentId="DOC-2026-1201" />,
+    () => <DocumentDetailPage documentId={ID.docRecorded} />,
   ],
   ["/review", /Review Queue/, () => <ReviewPage />],
-  ["/review/RV-041", /Decision/, () => <ReviewDetailPage itemId="RV-041" />],
-  ["/whatsapp", /Incoming messages/, () => <WhatsAppPage />],
+  [`/review/${ID.docReview}`, /Decision/, () => <ReviewDetailPage itemId={ID.docReview} />],
   ["/orders", /Customer Orders/, () => <OrdersPage />],
   ["/orders/new", /New customer order/, () => <OrderFormPage />],
   [`/orders/${ID.order}`, /Fulfilment by item/, () => <OrderDetailPage orderId={ID.order} />],

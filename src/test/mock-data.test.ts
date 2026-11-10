@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { orders, purchases, stockMovements, trips } from "@/data/operations";
 import { bills, expenses, invoices, payments } from "@/data/finance";
-import { documents, reviewItems, whatsappMessages } from "@/data/documents";
+import { documents, reviewItems } from "@/data/documents";
 import { auditEvents } from "@/data/admin";
 
 const countBy = <T>(items: T[], key: (item: T) => string) =>
@@ -22,7 +22,6 @@ describe("mock data", () => {
       expenses: expenses.length,
       documents: documents.length,
       review: reviewItems.length,
-      messages: whatsappMessages.length,
       audit: auditEvents.length,
       stock: stockMovements.length,
       tripStatus: countBy(trips, (t) => t.status),

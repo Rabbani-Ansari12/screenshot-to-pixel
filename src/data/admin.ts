@@ -287,11 +287,13 @@ export const settings: AppSettings = {
   autoProcessThreshold: 85,
   authoritativeWeight: "Delivery",
   enabledUnits: ["MT", "Brass", "Trips", "CFT", "m³"],
-  whatsapp: {
-    connected: true,
-    provider: "Twilio WhatsApp Business API",
-    number: "+91 98220 55500",
-    lastMessageAt: at(TODAY, 12, 6),
+  ai: {
+    dailyCallCap: 300,
+    callsToday: 0,
+    netWeightTolerance: 0.02,
+    matchThreshold: 70,
+    matchMargin: 15,
+    matchWindowHours: 72,
   },
   notifications: {
     reviewQueue: true,

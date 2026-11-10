@@ -123,7 +123,7 @@ export function ReviewDetailPage({ itemId }: { itemId: string }) {
     (r: Parameters<typeof api.review.resolveReviewItem>[1]) =>
       api.review.resolveReviewItem(itemId, r),
     (res) =>
-      `${res.id} ${res.status === "Rejected" ? "rejected" : "resolved"} · saved to audit history`,
+      `${res.document?.ref ?? res.id} ${res.status === "Rejected" ? "rejected" : "resolved"} · saved to audit history`,
   );
   useEffect(() => {
     setValues({});
@@ -171,7 +171,7 @@ export function ReviewDetailPage({ itemId }: { itemId: string }) {
     <>
       <PageHeader
         title={item.title}
-        crumbs={[{ label: item.id }]}
+        crumbs={[{ label: item.document?.ref ?? item.id }]}
         badge={
           <>
             <StatusBadge status={item.reason} tone="warning" />
@@ -418,10 +418,10 @@ export function ReviewDetailPage({ itemId }: { itemId: string }) {
         onOpenChange={(o) => !o && setConfirm(null)}
         title="Create a new trip from this document?"
         confirmLabel="Continue to trip form"
-        description="The document will be marked as matched and you'll be taken to the manual trip form."
+        description="Any corrections are saved first. Then choose the order and vehicle on the trip form; the loading weight comes from this document."
         onConfirm={async () => {
           await resolve.mutateAsync({ action: "create_trip", reason, corrections });
-          void navigate({ to: "/trips/new" });
+          void navigate({ to: "/trips/new", search: { fromDocument: itemId } });
         }}
       />
       <ConfirmDialog

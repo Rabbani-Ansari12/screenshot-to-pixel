@@ -19,7 +19,9 @@
     "create-owner": "tsx scripts/create-owner.ts",
     "db:seed:generate": "tsx scripts/generate-seed.ts",
     "db:api": "tsx scripts/supabase-api.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "worker:setup": "tsx scripts/setup-document-worker.ts",
+    "fixtures:generate": "node scripts/make-fixtures.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
@@ -63,6 +65,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
+    "heic2any": "^0.0.4",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
@@ -81,6 +84,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@google/genai": "^1.52.0",
     "@playwright/test": "^1.56.1",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",

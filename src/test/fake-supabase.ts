@@ -105,6 +105,17 @@ class Query implements PromiseLike<Result> {
     this.filters.push((r) => re.test(String(r[col] ?? "")));
     return this;
   }
+  /** not(col, "is", null) and not(col, "in", "(a,b)") */
+  not(col: string, op: string, value: unknown) {
+    if (op === "is") this.filters.push((r) => (r[col] ?? null) !== value);
+    else if (op === "in") {
+      const list = String(value)
+        .replace(/^\(|\)$/g, "")
+        .split(",");
+      this.filters.push((r) => !list.includes(String(r[col])));
+    } else this.filters.push((r) => r[col] !== value);
+    return this;
+  }
   contains(col: string, vs: unknown[]) {
     this.filters.push(
       (r) => Array.isArray(r[col]) && vs.every((v) => (r[col] as unknown[]).includes(v)),
@@ -241,6 +252,23 @@ export function createFakeSupabase(options: FakeOptions = {}) {
         return { data: await h(body), error: null };
       },
     },
+    storage: {
+      from: (bucket: string) => ({
+        upload: async (path: string) => {
+          (db["storage.objects"] ??= []).push({ bucket_id: bucket, name: path });
+          return { data: { path }, error: null };
+        },
+        createSignedUrl: async (path: string) => ({
+          data: { signedUrl: `https://storage.test/${bucket}/${path}?token=t` },
+          error: null,
+        }),
+      }),
+    },
+    channel: () => {
+      const ch = { on: () => ch, subscribe: () => ch };
+      return ch;
+    },
+    removeChannel: async () => "ok",
     auth: {
       getSession: async () => ({ data: { session: session() }, error: null }),
       onAuthStateChange: (cb: (event: string, s: unknown) => void) => {

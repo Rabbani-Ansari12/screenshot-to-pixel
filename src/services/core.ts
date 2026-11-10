@@ -32,7 +32,6 @@ export const db = {
   expenses: fin.expenses,
   documents: docs.documents,
   reviewItems: docs.reviewItems,
-  whatsappMessages: docs.whatsappMessages,
   employees: admin.employees,
   auditEvents: admin.auditEvents,
   settings: admin.settings,

@@ -70,11 +70,17 @@ export interface AppSettings {
   autoProcessThreshold: number;
   authoritativeWeight: "Loading" | "Delivery";
   enabledUnits: string[];
-  whatsapp: {
-    connected: boolean;
-    provider: string;
-    number: string;
-    lastMessageAt: ISODate;
+  /** AI document reading: cost cap and matching thresholds. */
+  ai: {
+    dailyCallCap: number;
+    callsToday: number;
+    /** MT; printed net vs gross − tare. */
+    netWeightTolerance: number;
+    /** 0–100 */
+    matchThreshold: number;
+    /** 0–100 */
+    matchMargin: number;
+    matchWindowHours: number;
   };
   notifications: {
     reviewQueue: boolean;

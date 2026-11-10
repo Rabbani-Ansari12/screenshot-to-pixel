@@ -368,7 +368,7 @@ function TripDetail({ data }: { data: NonNullable<ReturnType<typeof useTrip>["da
               { label: "Freight", value: formatINR(t.freight) },
               {
                 label: "Created via",
-                value: t.createdVia === "WhatsApp" ? "WhatsApp documents" : "Manual entry",
+                value: t.createdVia === "Document" ? "Uploaded documents" : "Manual entry",
               },
               {
                 label: "Purchase",

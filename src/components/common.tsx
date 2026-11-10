@@ -372,12 +372,12 @@ export function AutoFilledBadge({ className }: { className?: string }) {
         "inline-flex items-center gap-1 rounded-full border border-emerald-600/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300",
         className,
       )}
-      title="Filled automatically from a WhatsApp document"
+      title="Filled automatically from an uploaded document"
     >
       <svg viewBox="0 0 24 24" className="size-3" fill="currentColor" aria-hidden>
         <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20Z" />
       </svg>
-      Auto-filled from WhatsApp slip
+      Auto-filled from uploaded slip
     </span>
   );
 }

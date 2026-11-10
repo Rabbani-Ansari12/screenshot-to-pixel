@@ -3,7 +3,9 @@
  * so moving services to Supabase needs no component changes.
  */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { toast } from "sonner";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import * as admin from "@/services/admin.service";
 import * as bills from "@/services/bills.service";
 import * as dashboard from "@/services/dashboard.service";
@@ -19,7 +21,6 @@ import * as review from "@/services/review.service";
 import * as search from "@/services/search.service";
 import * as stock from "@/services/stock.service";
 import * as trips from "@/services/trips.service";
-import * as whatsapp from "@/services/whatsapp.service";
 import type { TableQuery } from "@/services/supabase/table-query";
 import type { Employee, Permission } from "@/types";
 
@@ -35,14 +36,12 @@ const q = <T>(key: unknown[], fn: () => Promise<T>, enabled = true) => ({
 export const useDashboard = () => useQuery(q(["dashboard"], dashboard.getDashboard));
 export const useDocuments = () => useQuery(q(["documents"], documents.listDocuments));
 export const useDocument = (id: string) =>
-  useQuery(q(["documents", id], () => documents.getDocument(id)));
+  useQuery(q(["documents", id], () => documents.getDocument(id), Boolean(id)));
 export const useReviewItems = () => useQuery(q(["review"], review.listReviewItems));
 export const useReviewItem = (id: string) =>
   useQuery(q(["review", id], () => review.getReviewItem(id)));
-export const useOpenTrips = () => useQuery(q(["trips", "open"], review.listOpenTrips));
-export const useMessages = () => useQuery(q(["whatsapp"], whatsapp.listMessages));
-export const useWhatsAppStatus = () =>
-  useQuery(q(["whatsapp", "status"], whatsapp.getWhatsAppStatus));
+export const useOpenTrips = (enabled = true) =>
+  useQuery(q(["trips", "open"], review.listOpenTrips, enabled));
 export const useOrders = () => useQuery(q(["orders"], orders.listOrders));
 /** Server-side page of orders; keeps the previous page on screen while the next one loads. */
 export const useOrdersPage = (query: TableQuery | null) =>
@@ -188,7 +187,6 @@ export const api = {
   purchases,
   review,
   trips,
-  whatsapp,
 };
 
 /**
@@ -227,4 +225,51 @@ export function useSetPermission() {
       void client.invalidateQueries({ queryKey: ["audit"] });
     },
   });
+}
+
+/** Marks notifications read when the bell is opened. */
+export function useMarkNotificationsRead() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: admin.markNotificationsRead,
+    onSuccess: () => client.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+/**
+ * Live updates: document status changes from the AI worker, new notifications and job progress
+ * refresh the inbox, review queue, trips and the bell without a reload. RLS applies to realtime too.
+ */
+export function useLiveUpdates(enabled: boolean) {
+  const client = useQueryClient();
+  useEffect(() => {
+    if (!enabled || !isSupabaseConfigured()) return;
+    const sb = getSupabase();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const keys = new Set<string>();
+    const refresh = (...k: string[]) => {
+      k.forEach((x) => keys.add(x));
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        keys.forEach((key) => void client.invalidateQueries({ queryKey: [key] }));
+        keys.clear();
+      }, 400);
+    };
+    const channel = sb
+      .channel("live-documents")
+      .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () =>
+        refresh("documents", "review", "trips", "orders", "stock"),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "document_jobs" }, () =>
+        refresh("documents"),
+      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () =>
+        refresh("notifications"),
+      )
+      .subscribe();
+    return () => {
+      clearTimeout(timer);
+      void sb.removeChannel(channel);
+    };
+  }, [enabled, client]);
 }

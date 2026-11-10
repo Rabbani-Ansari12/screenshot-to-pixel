@@ -170,25 +170,29 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
   return (
     <>
       <PageHeader
-        title={`${doc.type} · ${doc.id}`}
-        crumbs={[{ label: doc.id }]}
+        title={`${doc.type} · ${doc.ref ?? doc.id}`}
+        crumbs={[{ label: doc.ref ?? doc.id }]}
         badge={<StatusBadge status={doc.status} />}
         description={
           <>
-            From <span className="font-medium text-foreground">{doc.senderName}</span> (
-            {doc.senderPhone}) via {doc.source} · {formatDateTime(doc.receivedAt)}
+            Uploaded by <span className="font-medium text-foreground">{doc.senderName}</span> ·{" "}
+            {formatDateTime(doc.receivedAt)}
+            {doc.tripHint ? ` · for ${doc.tripHint.label}` : ""}
           </>
         }
         actions={
           <>
-            <Button
-              variant="outline"
-              onClick={() => reprocess.mutate(doc.id)}
-              disabled={reprocess.isPending}
-            >
-              <RefreshCw className={cn("size-4", reprocess.isPending && "animate-spin")} />{" "}
-              Reprocess
-            </Button>
+            {can("review_documents") &&
+              !["Automatically Recorded", "Matched"].includes(doc.status) && (
+                <Button
+                  variant="outline"
+                  onClick={() => reprocess.mutate(doc.id)}
+                  disabled={reprocess.isPending}
+                >
+                  <RefreshCw className={cn("size-4", reprocess.isPending && "animate-spin")} />{" "}
+                  {doc.status === "Failed" ? "Retry" : "Reprocess"}
+                </Button>
+              )}
             {can("correct_extracted") && !editing && doc.fields.length > 0 && (
               <Button variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="size-4" /> Correct Fields
@@ -223,6 +227,20 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
       {doc.note && (
         <p className="mb-4 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
           {doc.note}
+        </p>
+      )}
+      {doc.processingNote && (
+        <p
+          role="status"
+          className={cn(
+            "mb-4 rounded-lg border px-4 py-2.5 text-sm",
+            doc.status === "Failed"
+              ? "border-destructive/30 bg-destructive/5 text-destructive"
+              : "bg-muted/40 text-muted-foreground",
+          )}
+        >
+          {doc.status === "Failed" ? "Could not be read: " : "Waiting: "}
+          {doc.processingNote}
         </p>
       )}
 
@@ -339,7 +357,7 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
                   params={{ documentId: data.duplicateOf.id }}
                   className="font-semibold text-primary hover:underline"
                 >
-                  {data.duplicateOf.id}
+                  {data.duplicateOf.ref ?? data.duplicateOf.id}
                 </Link>{" "}
                 — not recorded again.
               </p>

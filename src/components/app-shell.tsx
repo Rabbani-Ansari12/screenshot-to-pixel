@@ -37,7 +37,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useNotifications, useReviewItems, useWhatsAppStatus } from "@/hooks/queries";
+import {
+  useLiveUpdates,
+  useMarkNotificationsRead,
+  useNotifications,
+  useReviewItems,
+} from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
 import { formatRelative, initials } from "@/lib/format";
 import { NAV_GROUPS, navItemFor, usesSampleData } from "@/lib/navigation";
@@ -75,7 +80,6 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { can } = useAuth();
   const reviewCount = useReviewCount();
   const active = navItemFor(pathname);
-  const { data: wa } = useWhatsAppStatus();
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
@@ -134,19 +138,11 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
       <div className="m-3 rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold">WhatsApp automation</span>
-          <span
-            className={cn(
-              "size-2 rounded-full",
-              wa?.connected === false ? "bg-rose-400" : "bg-emerald-400",
-            )}
-            aria-hidden
-          />
+          <span className="text-xs font-semibold">Document intake</span>
+          <span className="size-2 rounded-full bg-emerald-400" aria-hidden />
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-sidebar-foreground/60">
-          {wa?.connected === false
-            ? "Disconnected — use manual upload."
-            : `Connected via Twilio · last message ${wa ? formatRelative(wa.lastMessageAt) : "…"}`}
+          Upload slips and bills from the inbox. AI reads them and records what it can match.
         </p>
       </div>
     </div>
@@ -155,9 +151,15 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
 function NotificationsBell() {
   const { data } = useNotifications();
+  const markRead = useMarkNotificationsRead();
   const unread = data?.filter((n) => !n.read).length ?? 0;
   return (
-    <Popover>
+    <Popover
+      onOpenChange={(open) => {
+        const ids = (data ?? []).filter((n) => !n.read).map((n) => n.id);
+        if (!open && ids.length) markRead.mutate(ids);
+      }}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
@@ -228,35 +230,6 @@ function NotificationsBell() {
         </div>
       </PopoverContent>
     </Popover>
-  );
-}
-
-function WhatsAppIndicator() {
-  const { data } = useWhatsAppStatus();
-  const connected = data?.connected !== false;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Link
-          to="/whatsapp"
-          className={cn(
-            "hidden h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium md:flex",
-            connected
-              ? "border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : "border-rose-600/25 bg-rose-500/10 text-rose-700 dark:text-rose-300",
-          )}
-        >
-          <span
-            className={cn("size-2 rounded-full", connected ? "bg-emerald-500" : "bg-rose-500")}
-            aria-hidden
-          />
-          WhatsApp {connected ? "connected" : "disconnected"}
-        </Link>
-      </TooltipTrigger>
-      <TooltipContent>
-        {connected ? `Twilio · ${data?.number ?? ""}` : "Use manual upload until the line is back"}
-      </TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -396,6 +369,7 @@ function MobileBottomNav({ onMore }: { onMore: () => void }) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  useLiveUpdates(true);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { can } = useAuth();
   const [drawer, setDrawer] = useState(false);
@@ -439,7 +413,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             </kbd>
           </button>
           <div className="ml-auto flex items-center gap-1">
-            <WhatsAppIndicator />
             <NotificationsBell />
             <ThemeToggle />
             <UserMenu />

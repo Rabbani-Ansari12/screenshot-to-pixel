@@ -48,10 +48,13 @@ class HttpError extends Error {
 const fail = (status: number, message: string): never => {
   throw new HttpError(status, message);
 };
-const must = <T>(res: { data: T; error: { message: string } | null }, what: string): T => {
+function must<R extends { data: unknown; error: { message: string } | null }>(
+  res: R,
+  what: string,
+): R["data"] {
   if (res.error) fail(400, `${what}: ${res.error.message}`);
   return res.data;
-};
+}
 
 const isPermissionList = (v: unknown): v is Permission[] =>
   Array.isArray(v) && v.every((p) => (PERMISSIONS as readonly string[]).includes(p as string));

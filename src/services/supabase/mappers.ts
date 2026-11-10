@@ -152,7 +152,7 @@ export const methodToDb = (m: MeasurementSource): Enums<"measurement_method"> =>
       : "manual_entry";
 
 export const sourceFromDb = (s: Enums<"record_source"> | null) =>
-  s === "whatsapp" ? ("WhatsApp" as const) : ("Manual" as const);
+  s === "document" ? ("Document" as const) : ("Manual" as const);
 
 // ---------- Small helpers ----------
 export const num = (v: number | string | null | undefined): number => {
@@ -440,7 +440,7 @@ function weigh(r: Views<"v_trip_list">, kind: "loading" | "delivery"): WeighReco
     location: str(L ? r.loading_location : r.delivery_location),
     source: methodFromDb(L ? r.loading_method : r.delivery_method),
     documentId: L ? r.loading_document_id : r.delivery_document_id,
-    autoFilled: source === "whatsapp",
+    autoFilled: source === "document",
   };
 }
 

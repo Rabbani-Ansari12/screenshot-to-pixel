@@ -37,7 +37,7 @@ These rules apply to every contributor, human or AI.
 ## Integrations
 
 - AI document reading calls the Google Gemini API directly with our own key.
-- WhatsApp goes through Twilio directly with our own credentials.
+- Documents arrive by in-app upload (see docs/intake.md); there is no WhatsApp / Twilio integration.
 
 ## Frontend
 

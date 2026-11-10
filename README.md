@@ -9,7 +9,7 @@ and recorded automatically. People only handle exceptions.
 - React 19 + TypeScript, TanStack Start / Router, TanStack Query
 - Tailwind CSS v4 + shadcn/ui, Recharts, lucide-react
 - Supabase (Postgres + Row Level Security, Auth, Storage, Edge Functions)
-- Google Gemini (document reading)
+- Google Gemini (document reading, server-side only)
 
 ## Local setup
 
@@ -38,13 +38,13 @@ against production.
 cp .env.example .env.local
 ```
 
-| File | Variable | Value |
-| --- | --- | --- |
-| `.env.local` | `VITE_SUPABASE_URL` | API URL (`http://127.0.0.1:54321` locally, or `https://<ref>.supabase.co`) |
-| `.env.local` | `VITE_SUPABASE_ANON_KEY` | anon / publishable key (public) |
-| `supabase/.env` | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | for `npm run create-owner` only — never in the frontend |
-| `supabase/.env` | `SUPABASE_ACCESS_TOKEN` | personal access token, for the CLI / `npm run db:api` against the hosted project |
-| `supabase/secrets.env` | `OWNER_EMAIL`, `OWNER_PASSWORD`, `APP_ORIGIN`, … | Edge Function secrets, see `docs/secrets.md` |
+| File                   | Variable                                         | Value                                                                            |
+| ---------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `.env.local`           | `VITE_SUPABASE_URL`                              | API URL (`http://127.0.0.1:54321` locally, or `https://<ref>.supabase.co`)       |
+| `.env.local`           | `VITE_SUPABASE_ANON_KEY`                         | anon / publishable key (public)                                                  |
+| `supabase/.env`        | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`      | for `npm run create-owner` only — never in the frontend                          |
+| `supabase/.env`        | `SUPABASE_ACCESS_TOKEN`                          | personal access token, for the CLI / `npm run db:api` against the hosted project |
+| `supabase/secrets.env` | `OWNER_EMAIL`, `OWNER_PASSWORD`, `APP_ORIGIN`, … | Edge Function secrets, see `docs/secrets.md`                                     |
 
 All of these files are gitignored. Only `.env.example` and `supabase/secrets.placeholder.env`
 (placeholders) are committed.
@@ -75,6 +75,8 @@ npx supabase link --project-ref <ref>
 npm run db:push                 # apply new migrations
 npm run db:types                # regenerate src/types/database.ts
 npx supabase functions deploy admin-manage-employee --use-api
+npx supabase functions deploy process-document --use-api --no-verify-jwt
+npm run worker:setup            # worker secret + Vault entries for pg_net / pg_cron
 ```
 
 If your network blocks the Postgres port, the same operations work over HTTPS:
@@ -93,25 +95,28 @@ If your network blocks the Postgres port, the same operations work over HTTPS:
 - Units are never converted (no MT ↔ volume); the database rejects a unit that differs from the
   material's.
 
-Modules not yet connected (dashboard, documents & review, WhatsApp, bills, invoices, payments,
-expenses, profit, reports) still show the built-in sample data from `src/data`, with a notice on
-the page.
+Documents are uploaded in the app (files or phone camera) and read by Gemini in the
+`process-document` Edge Function — see `docs/intake.md` and `docs/ai-pipeline.md`. Clear slips are
+recorded on their trip automatically; everything else goes to the Review Queue.
+
+Modules not yet connected (dashboard, bills, reconciliation, invoices, payments, expenses, profit,
+reports) still show the built-in sample data from `src/data`, with a notice on the page.
 
 ## Scripts
 
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Dev server |
-| `npm run build` | Production build (Node server in `.output/`) |
-| `npm test` | Unit, service, auth-guard and page smoke tests (fake Supabase client, no network) |
-| `npm run test:e2e` | Playwright smoke tests — needs a test project, see `playwright.config.ts` |
-| `npm run lint` | ESLint + Prettier |
-| `npm run db:types` | Regenerate `src/types/database.ts` from the linked Supabase project |
-| `npm run db:push` | Apply new migrations to the linked Supabase project |
-| `npm run db:test` | pgTAP tests (RLS, business rules, RPCs) against the linked project, rolled back |
-| `npm run create-owner` | Create the first owner account |
-| `npm run db:seed:generate` | Regenerate `supabase/seed.sql` (dev data) from `src/data` |
-| `npm run db:api -- …` | DB operations over HTTPS when the Postgres port is blocked |
+| Command                    | What it does                                                                      |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `npm run dev`              | Dev server                                                                        |
+| `npm run build`            | Production build (Node server in `.output/`)                                      |
+| `npm test`                 | Unit, service, auth-guard and page smoke tests (fake Supabase client, no network) |
+| `npm run test:e2e`         | Playwright smoke tests — needs a test project, see `playwright.config.ts`         |
+| `npm run lint`             | ESLint + Prettier                                                                 |
+| `npm run db:types`         | Regenerate `src/types/database.ts` from the linked Supabase project               |
+| `npm run db:push`          | Apply new migrations to the linked Supabase project                               |
+| `npm run db:test`          | pgTAP tests (RLS, business rules, RPCs) against the linked project, rolled back   |
+| `npm run create-owner`     | Create the first owner account                                                    |
+| `npm run db:seed:generate` | Regenerate `supabase/seed.sql` (dev data) from `src/data`                         |
+| `npm run db:api -- …`      | DB operations over HTTPS when the Postgres port is blocked                        |
 
 ### End-to-end tests
 
@@ -133,7 +138,7 @@ src/services              Data access (Supabase; src/services/supabase has mappe
 src/data                  Sample data for modules not yet connected
 src/types                 Domain types + generated database types
 supabase/migrations       Database schema (the only way to change it)
-supabase/functions        Edge Functions (admin-manage-employee, config-check)
+supabase/functions        Edge Functions (process-document, admin-manage-employee, config-check)
 supabase/tests            pgTAP tests
 e2e/                      Playwright smoke tests
 docs/                     Schema (ERD) and secrets documentation
