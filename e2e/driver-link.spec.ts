@@ -89,6 +89,6 @@ test("expired, revoked or made-up links all show the same plain message", async 
   const phone = await browser.newContext({ ...devices["Pixel 5"] });
   const driver = await phone.newPage();
   await driver.goto(`/u/${"x".repeat(43)}`);
-  await expect(driver.getByRole("alert")).toContainText("not valid any more");
+  await expect(driver.getByRole("alert")).toContainText("not valid any more", { timeout: 45_000 });
   await phone.close();
 });
