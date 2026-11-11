@@ -1,7 +1,7 @@
 // Reports which secrets are configured (names only, never values).
 // Requires a signed-in active owner. Deploy: npx supabase functions deploy config-check --use-api
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { SECRET_NAMES, getSecret, secretProblem } from "../_shared/env.ts";
+import { OPTIONAL_SECRETS, SECRET_NAMES, getSecret, secretProblem } from "../_shared/env.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     SECRET_NAMES.map((name) => [name, secretProblem(name) ?? "configured"]),
   );
   const pending = Object.entries(secrets)
-    .filter(([, state]) => state !== "configured")
+    .filter(([name, state]) => state !== "configured" && !OPTIONAL_SECRETS.includes(name))
     .map(([name]) => name);
   return json({ ok: pending.length === 0, pending, secrets });
 });

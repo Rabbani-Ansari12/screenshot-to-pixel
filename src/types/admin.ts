@@ -70,6 +70,15 @@ export interface AppSettings {
   autoProcessThreshold: number;
   authoritativeWeight: "Loading" | "Delivery";
   enabledUnits: string[];
+  /** Driver upload links (no login). */
+  driverLinks: {
+    expiryHours: number;
+    maxUploads: number;
+    allowedDocTypes: string[];
+    rateLimitPerIp: number;
+  };
+  /** Daily e-mail digest of exceptions (Resend). Off by default. */
+  emailDigest: boolean;
   /** AI document reading: cost cap and matching thresholds. */
   ai: {
     dailyCallCap: number;

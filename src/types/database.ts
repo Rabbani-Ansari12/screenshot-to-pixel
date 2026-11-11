@@ -137,6 +137,8 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_shortage_tolerance: number
+          email_digest_enabled: boolean
+          email_digest_last_sent_at: string | null
           enabled_units: Database["public"]["Enums"]["material_unit"][]
           gst_config: Json
           id: string
@@ -151,6 +153,10 @@ export type Database = {
           notification_preferences: Json
           updated_at: string
           updated_by: string | null
+          upload_link_doc_types: string[]
+          upload_link_expiry_hours: number
+          upload_link_max_uploads: number
+          upload_rate_limit_per_ip: number
         }
         Insert: {
           ai_daily_call_cap?: number
@@ -161,6 +167,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_shortage_tolerance?: number
+          email_digest_enabled?: boolean
+          email_digest_last_sent_at?: string | null
           enabled_units?: Database["public"]["Enums"]["material_unit"][]
           gst_config?: Json
           id?: string
@@ -175,6 +183,10 @@ export type Database = {
           notification_preferences?: Json
           updated_at?: string
           updated_by?: string | null
+          upload_link_doc_types?: string[]
+          upload_link_expiry_hours?: number
+          upload_link_max_uploads?: number
+          upload_rate_limit_per_ip?: number
         }
         Update: {
           ai_daily_call_cap?: number
@@ -185,6 +197,8 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_shortage_tolerance?: number
+          email_digest_enabled?: boolean
+          email_digest_last_sent_at?: string | null
           enabled_units?: Database["public"]["Enums"]["material_unit"][]
           gst_config?: Json
           id?: string
@@ -199,6 +213,10 @@ export type Database = {
           notification_preferences?: Json
           updated_at?: string
           updated_by?: string | null
+          upload_link_doc_types?: string[]
+          upload_link_expiry_hours?: number
+          upload_link_max_uploads?: number
+          upload_rate_limit_per_ip?: number
         }
         Relationships: [
           {
@@ -1014,6 +1032,7 @@ export type Database = {
           trip_id: string | null
           updated_at: string
           updated_by: string | null
+          upload_token_id: string | null
           uploaded_by: string | null
           uploaded_by_label: string | null
         }
@@ -1052,6 +1071,7 @@ export type Database = {
           trip_id?: string | null
           updated_at?: string
           updated_by?: string | null
+          upload_token_id?: string | null
           uploaded_by?: string | null
           uploaded_by_label?: string | null
         }
@@ -1090,6 +1110,7 @@ export type Database = {
           trip_id?: string | null
           updated_at?: string
           updated_by?: string | null
+          upload_token_id?: string | null
           uploaded_by?: string | null
           uploaded_by_label?: string | null
         }
@@ -1212,6 +1233,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_trip_weights"
             referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "documents_upload_token_id_fkey"
+            columns: ["upload_token_id"]
+            isOneToOne: false
+            referencedRelation: "upload_tokens"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1808,6 +1836,7 @@ export type Database = {
           href: string | null
           id: string
           kind: string
+          occurrences: number
           read_by: string[]
           required_permission:
             | Database["public"]["Enums"]["permission_key"]
@@ -1815,6 +1844,7 @@ export type Database = {
           severity: string
           title: string
           trip_id: string | null
+          updated_at: string
         }
         Insert: {
           business_id: string
@@ -1824,6 +1854,7 @@ export type Database = {
           href?: string | null
           id?: string
           kind: string
+          occurrences?: number
           read_by?: string[]
           required_permission?:
             | Database["public"]["Enums"]["permission_key"]
@@ -1831,6 +1862,7 @@ export type Database = {
           severity?: string
           title: string
           trip_id?: string | null
+          updated_at?: string
         }
         Update: {
           business_id?: string
@@ -1840,6 +1872,7 @@ export type Database = {
           href?: string | null
           id?: string
           kind?: string
+          occurrences?: number
           read_by?: string[]
           required_permission?:
             | Database["public"]["Enums"]["permission_key"]
@@ -1847,6 +1880,7 @@ export type Database = {
           severity?: string
           title?: string
           trip_id?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -2709,6 +2743,24 @@ export type Database = {
           },
         ]
       }
+      rate_limit_hits: {
+        Row: {
+          bucket: string
+          hits: number
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          hits?: number
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          hits?: number
+          window_start?: string
+        }
+        Relationships: []
+      }
       reconciliation_records: {
         Row: {
           amount_difference: number | null
@@ -3463,6 +3515,90 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      upload_tokens: {
+        Row: {
+          allowed_doc_types: string[]
+          business_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          max_uploads: number
+          revoked_at: string | null
+          revoked_by: string | null
+          token_hash: string
+          trip_id: string
+          upload_count: number
+        }
+        Insert: {
+          allowed_doc_types: string[]
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          max_uploads?: number
+          revoked_at?: string | null
+          revoked_by?: string | null
+          token_hash: string
+          trip_id: string
+          upload_count?: number
+        }
+        Update: {
+          allowed_doc_types?: string[]
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          max_uploads?: number
+          revoked_at?: string | null
+          revoked_by?: string | null
+          token_hash?: string
+          trip_id?: string
+          upload_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_tokens_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upload_tokens_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "truck_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upload_tokens_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upload_tokens_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upload_tokens_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_weights"
+            referencedColumns: ["trip_id"]
           },
         ]
       }
@@ -4868,6 +5004,14 @@ export type Database = {
         Args: { p_delivery?: Json; p_loading: Json; p_trip: Json }
         Returns: Json
       }
+      create_upload_token: {
+        Args: {
+          p_allowed_doc_types?: string[]
+          p_expires_in_hours?: number
+          p_trip_id: string
+        }
+        Returns: Json
+      }
       create_vehicle: {
         Args: { p_driver?: Json; p_vehicle: Json }
         Returns: string
@@ -4918,6 +5062,7 @@ export type Database = {
           trip_id: string | null
           updated_at: string
           updated_by: string | null
+          upload_token_id: string | null
           uploaded_by: string | null
           uploaded_by_label: string | null
         }
@@ -4927,6 +5072,20 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      driver_link_info: { Args: { p_token_hash: string }; Returns: Json }
+      driver_link_register_upload: {
+        Args: {
+          p_doc_type: string
+          p_driver_name?: string
+          p_file_name: string
+          p_mime_type: string
+          p_sha256: string
+          p_size_bytes: number
+          p_storage_path: string
+          p_token_hash: string
+        }
+        Returns: Json
       }
       enqueue_document: { Args: { p_document_id: string }; Returns: string }
       finish_document_job: {
@@ -4944,11 +5103,32 @@ export type Database = {
       is_active_user: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       kick_document_worker: { Args: never; Returns: undefined }
+      kick_notify_digest: { Args: never; Returns: undefined }
       mark_document_duplicate: {
         Args: { p_document_id: string; p_original_id: string; p_reason: string }
         Returns: undefined
       }
       mark_notifications_read: { Args: { p_ids: string[] }; Returns: undefined }
+      push_notification: {
+        Args: {
+          p_business_id: string
+          p_detail: string
+          p_document_id: string
+          p_group_href: string
+          p_group_title: string
+          p_href: string
+          p_kind: string
+          p_permission: Database["public"]["Enums"]["permission_key"]
+          p_severity: string
+          p_title: string
+          p_trip_id: string
+        }
+        Returns: undefined
+      }
+      rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds?: number }
+        Returns: boolean
+      }
       recalculate_invoice_totals: {
         Args: { p_invoice_id: string }
         Returns: undefined
@@ -5013,6 +5193,7 @@ export type Database = {
         Args: { p_document_id: string; p_reason: string; p_trip: Json }
         Returns: Json
       }
+      revoke_upload_token: { Args: { p_id: string }; Returns: undefined }
       save_weight_record: {
         Args: {
           p_reason?: string

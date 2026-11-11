@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  useIntakeStats,
   useLiveUpdates,
   useMarkNotificationsRead,
   useNotifications,
@@ -233,6 +234,38 @@ function NotificationsBell() {
   );
 }
 
+/** Small intake status in the top bar: documents processed today and failures. */
+function IntakeIndicator() {
+  const { can } = useAuth();
+  const { data } = useIntakeStats();
+  if (!can("view_records") || !data) return null;
+  const failed = data.failedToday > 0;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          to="/uploads"
+          className={cn(
+            "hidden h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium md:flex",
+            failed
+              ? "border-rose-600/25 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+              : "border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+          )}
+        >
+          <span
+            className={cn("size-2 rounded-full", failed ? "bg-rose-500" : "bg-emerald-500")}
+            aria-hidden
+          />
+          Intake · {data.processedToday} today{failed ? ` · ${data.failedToday} failed` : ""}
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent>
+        {data.receivedToday} received today · {data.inProgress} being read now
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("light");
   useEffect(() => setTheme(readTheme()), []);
@@ -413,6 +446,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </kbd>
           </button>
           <div className="ml-auto flex items-center gap-1">
+            <IntakeIndicator />
             <NotificationsBell />
             <ThemeToggle />
             <UserMenu />

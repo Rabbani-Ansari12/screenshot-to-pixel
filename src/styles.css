@@ -241,3 +241,28 @@
     border: 0 !important;
   }
 }
+
+/* Trip sheets: print only the sheets, two per A4 page. */
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0;
+  }
+  .trip-sheet {
+    height: 135mm;
+    break-inside: avoid;
+    border: 1px dashed #999;
+    margin-bottom: 7mm;
+  }
+}

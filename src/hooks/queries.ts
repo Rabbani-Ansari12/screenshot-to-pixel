@@ -11,6 +11,7 @@ import * as bills from "@/services/bills.service";
 import * as dashboard from "@/services/dashboard.service";
 import * as documents from "@/services/documents.service";
 import * as invoices from "@/services/invoices.service";
+import * as links from "@/services/links.service";
 import * as masters from "@/services/masters.service";
 import * as orders from "@/services/orders.service";
 import * as payments from "@/services/payments.service";
@@ -141,6 +142,13 @@ export const useMaterial = (id: string) =>
 export const useMasterOptions = () => useQuery(q(["options"], masters.getMasterOptions));
 export const useReport = (id: reports.ReportId, filters: reports.ReportFilters) =>
   useQuery(q(["reports", id, filters], () => reports.getReport(id, filters)));
+export const useDriverLinks = () => useQuery(q(["links"], links.listLinks));
+export const useTripLinks = (tripCode: string) =>
+  useQuery(q(["links", "trip", tripCode], () => links.getTripLinks(tripCode), Boolean(tripCode)));
+export const useIntakeStats = () =>
+  useQuery({ ...q(["documents", "intake-stats"], links.getIntakeStats), refetchInterval: 60_000 });
+export const useRecentUploads = () =>
+  useQuery(q(["documents", "recent"], () => links.listRecentUploads()));
 export const useEmployees = () => useQuery(q(["employees"], admin.listEmployees));
 export const useAuditEvents = () => useQuery(q(["audit"], admin.listAuditEvents));
 export const useSettings = () => useQuery(q(["settings"], admin.getSettings));
@@ -178,6 +186,7 @@ export function useAction<TArgs, TResult>(
 
 export const api = {
   admin,
+  links,
   bills,
   documents,
   invoices,
@@ -258,12 +267,12 @@ export function useLiveUpdates(enabled: boolean) {
     const channel = sb
       .channel("live-documents")
       .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () =>
-        refresh("documents", "review", "trips", "orders", "stock"),
+        refresh("documents", "review", "trips", "orders", "stock", "links"),
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "document_jobs" }, () =>
         refresh("documents"),
       )
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () =>
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () =>
         refresh("notifications"),
       )
       .subscribe();

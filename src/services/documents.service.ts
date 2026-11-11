@@ -16,7 +16,7 @@ import type {
   TripView,
 } from "@/types";
 import type { Enums, Json, Tables } from "@/lib/supabase";
-import { prepareUpload } from "@/lib/upload-prep";
+import { prepareUpload, type PreparedUpload } from "@/lib/upload-prep";
 import { AppError, check, rows, unwrap, unwrapMaybe } from "./supabase/errors";
 import { fetchTripsIn, sb, tripUuid } from "./supabase/fetch";
 
@@ -312,35 +312,60 @@ export interface UploadResult {
 }
 
 /** Downscale (photos), hash, store in the private bucket, register, queue for processing. */
+/** Already-stored originals with these hashes (for the duplicate warning before upload). */
+export async function findByHashes(
+  hashes: string[],
+): Promise<Map<string, { id: string; ref: string }>> {
+  if (!hashes.length) return new Map();
+  const list = rows(
+    await sb()
+      .from("documents")
+      .select("id, sha256")
+      .in("sha256", hashes)
+      .is("duplicate_of_document_id", null)
+      .is("deleted_at", null),
+  );
+  return new Map(list.map((d) => [d.sha256, { id: d.id, ref: docRef(d.id) }]));
+}
+
+let businessIdCache: string | null = null;
+async function businessFolder(): Promise<string> {
+  businessIdCache ??= unwrap(await sb().rpc("current_business_id")) as string;
+  return businessIdCache;
+}
+
+/** Stores one (already prepared) file and registers it. */
+export async function uploadOne(
+  item: UploadInput & { prepared?: PreparedUpload },
+): Promise<{ id: string; duplicate: boolean }> {
+  const prepared = item.prepared ?? (await prepareUpload(item.file));
+  const now = new Date();
+  const path = `${await businessFolder()}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.${prepared.ext}`;
+  const up = await sb().storage.from("documents").upload(path, prepared.blob, {
+    contentType: prepared.mimeType,
+    upsert: false,
+  });
+  if (up.error) throw new AppError(`Could not upload ${item.file.name}: ${up.error.message}`);
+  const tripHintId = item.tripHint ? await tripUuid(item.tripHint).catch(() => null) : null;
+  const res = unwrap(
+    await sb().rpc("register_uploaded_document", {
+      p_storage_path: path,
+      p_sha256: prepared.sha256,
+      p_file_name: item.file.name,
+      p_mime_type: prepared.mimeType,
+      p_size_bytes: prepared.blob.size,
+      ...(tripHintId ? { p_trip_hint_id: tripHintId } : {}),
+      ...(item.typeHint ? { p_document_type_hint: docTypeToDb(item.typeHint) } : {}),
+      ...(item.uploadedByLabel.trim() ? { p_uploaded_by_label: item.uploadedByLabel.trim() } : {}),
+    }),
+  ) as { id: string; status: string };
+  return { id: res.id, duplicate: res.status === "duplicate" };
+}
+
+/** Downscale (photos), hash, store in the private bucket, register, queue for processing. */
 export async function uploadDocuments(items: UploadInput[]): Promise<UploadResult[]> {
-  const businessId = unwrap(await sb().rpc("current_business_id"));
   const results: { id: string; duplicate: boolean }[] = [];
-  for (const item of items) {
-    const prepared = await prepareUpload(item.file);
-    const now = new Date();
-    const path = `${businessId}/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}.${prepared.ext}`;
-    const up = await sb().storage.from("documents").upload(path, prepared.blob, {
-      contentType: prepared.mimeType,
-      upsert: false,
-    });
-    if (up.error) throw new AppError(`Could not upload ${item.file.name}: ${up.error.message}`);
-    const tripHintId = item.tripHint ? await tripUuid(item.tripHint).catch(() => null) : null;
-    const res = unwrap(
-      await sb().rpc("register_uploaded_document", {
-        p_storage_path: path,
-        p_sha256: prepared.sha256,
-        p_file_name: item.file.name,
-        p_mime_type: prepared.mimeType,
-        p_size_bytes: prepared.blob.size,
-        ...(tripHintId ? { p_trip_hint_id: tripHintId } : {}),
-        ...(item.typeHint ? { p_document_type_hint: docTypeToDb(item.typeHint) } : {}),
-        ...(item.uploadedByLabel.trim()
-          ? { p_uploaded_by_label: item.uploadedByLabel.trim() }
-          : {}),
-      }),
-    ) as { id: string; status: string };
-    results.push({ id: res.id, duplicate: res.status === "duplicate" });
-  }
+  for (const item of items) results.push(await uploadOne(item));
   const list = await docRows((q) =>
     q.in(
       "id",

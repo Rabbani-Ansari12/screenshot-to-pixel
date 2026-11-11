@@ -14,7 +14,7 @@ import {
   Inbox,
   Layers3,
   LayoutDashboard,
-  MessageCircle,
+  Upload,
   Package,
   ReceiptIndianRupee,
   Scale,
@@ -57,6 +57,7 @@ export const NAV_GROUPS: NavGroup[] = [
         requires: "review_documents",
         badge: "review",
       },
+      { label: "Uploads & Links", path: "/uploads", icon: Upload, requires: "view_records" },
     ],
   },
   {
@@ -161,6 +162,10 @@ export function navItemFor(pathname: string): NavItem | undefined {
 }
 
 export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
+
+/** Pages outside the signed-in app: auth pages and the driver upload page (/u/:token). */
+export const isPublicPath = (pathname: string) =>
+  PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/u/");
 
 /**
  * Pages whose data still comes from the built-in sample data (src/data) until their module is

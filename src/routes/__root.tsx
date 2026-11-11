@@ -18,7 +18,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/protected-route";
 import { AuthProvider } from "@/lib/auth";
-import { PUBLIC_PATHS } from "@/lib/navigation";
+import { isPublicPath } from "@/lib/navigation";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 
 function NotFoundComponent() {
@@ -143,7 +143,7 @@ function RootShell({ children }: { children: ReactNode }) {
 /** Public pages render bare; everything else needs an active session and gets the app shell. */
 function AppFrame({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  if (PUBLIC_PATHS.includes(pathname)) return <>{children}</>;
+  if (isPublicPath(pathname)) return <>{children}</>;
   return (
     <ProtectedRoute>
       <AppShell>{children}</AppShell>

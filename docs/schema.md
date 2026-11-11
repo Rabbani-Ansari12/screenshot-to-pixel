@@ -2,21 +2,22 @@
 
 Postgres on Supabase. The schema is defined only by the ordered files in `supabase/migrations/`:
 
-| Migration                 | Contents                                                                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `…120000_foundation`      | Enums, `businesses`, `profiles`, `employees`, `user_permissions`, `audit_logs`, security helpers, code generators, new-user trigger                               |
-| `…120100_masters`         | Customers, sites, materials, rates, providers, transporters, drivers, vehicles, stock locations                                                                   |
-| `…120200_operations`      | Orders, purchases, trips, weight & delivery records, stock movements, business-rule triggers                                                                      |
-| `…120300_documents`       | Documents, AI processing records (the original WhatsApp table was removed in `…140100`)                                                                           |
-| `…120400_finance`         | Bills, invoices, reconciliation, payments, expenses, app settings, numbering & totals                                                                             |
-| `…120500_security`        | `updated_at` + audit triggers, RLS policies on every table, privileges                                                                                            |
-| `…120600_views`           | Reporting views                                                                                                                                                   |
-| `…120700_storage`         | Private `documents` bucket and its policies                                                                                                                       |
-| `…120800_indexes`         | Indexes on every FK, lookups, statuses and dates                                                                                                                  |
-| `…130000_enum_values`     | Units `BAG`, `NOS`; measurement method `manual_entry`                                                                                                             |
-| `…130100_app_logic`       | `audit_logs.reason`, `provider_materials`, purchase cost breakdown, list views, transactional RPCs                                                                |
-| `…140000_intake_enums`    | `record_source` `whatsapp` → `document`; review reasons `no_match`, `vehicle_mismatch`; status `rejected`; intake / job enums                                     |
-| `…140100_document_intake` | WhatsApp removed; upload intake, `document_jobs` queue, `document_corrections`, `ai_usage_daily`, `notifications`, worker and review functions, Realtime, pg_cron |
+| Migration                     | Contents                                                                                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `…120000_foundation`          | Enums, `businesses`, `profiles`, `employees`, `user_permissions`, `audit_logs`, security helpers, code generators, new-user trigger                               |
+| `…120100_masters`             | Customers, sites, materials, rates, providers, transporters, drivers, vehicles, stock locations                                                                   |
+| `…120200_operations`          | Orders, purchases, trips, weight & delivery records, stock movements, business-rule triggers                                                                      |
+| `…120300_documents`           | Documents, AI processing records (the original WhatsApp table was removed in `…140100`)                                                                           |
+| `…120400_finance`             | Bills, invoices, reconciliation, payments, expenses, app settings, numbering & totals                                                                             |
+| `…120500_security`            | `updated_at` + audit triggers, RLS policies on every table, privileges                                                                                            |
+| `…120600_views`               | Reporting views                                                                                                                                                   |
+| `…120700_storage`             | Private `documents` bucket and its policies                                                                                                                       |
+| `…120800_indexes`             | Indexes on every FK, lookups, statuses and dates                                                                                                                  |
+| `…130000_enum_values`         | Units `BAG`, `NOS`; measurement method `manual_entry`                                                                                                             |
+| `…130100_app_logic`           | `audit_logs.reason`, `provider_materials`, purchase cost breakdown, list views, transactional RPCs                                                                |
+| `…140000_intake_enums`        | `record_source` `whatsapp` → `document`; review reasons `no_match`, `vehicle_mismatch`; status `rejected`; intake / job enums                                     |
+| `…140100_document_intake`     | WhatsApp removed; upload intake, `document_jobs` queue, `document_corrections`, `ai_usage_daily`, `notifications`, worker and review functions, Realtime, pg_cron |
+| `20261111100000_driver_links` | Driver upload links (`upload_tokens`, hashed), `rate_limit_hits`, grouped + financial notifications, e-mail digest switch and schedule                            |
 
 ## Conventions
 

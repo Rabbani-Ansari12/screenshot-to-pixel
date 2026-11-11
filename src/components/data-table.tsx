@@ -10,6 +10,7 @@ import {
   List,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -73,6 +74,12 @@ export interface DataTableProps<T> {
    * paging are sent to `onQueryChange` (search debounced) and `total` drives the pager.
    */
   server?: { total: number; onQueryChange: (query: TableQuery) => void };
+  /** Row selection (checkbox column) for bulk actions. */
+  selection?: {
+    selected: Set<string>;
+    onChange: (next: Set<string>) => void;
+    label?: (row: T) => string;
+  };
 }
 
 const alignCls = (a?: "left" | "right") => (a === "right" ? "text-right" : "text-left");
@@ -101,6 +108,7 @@ export function DataTable<T>({
   caption,
   gridItem,
   server,
+  selection,
 }: DataTableProps<T>) {
   const [view, setView] = useState<"table" | "grid">("table");
   const navigate = useNavigate();
@@ -277,6 +285,23 @@ export function DataTable<T>({
               {caption && <caption className="sr-only">{caption}</caption>}
               <thead>
                 <tr className="border-b border-border/70 bg-muted/40">
+                  {selection && (
+                    <th scope="col" className="w-10 px-4 py-2.5">
+                      <Checkbox
+                        aria-label="Select all rows on this page"
+                        checked={
+                          rows.length > 0 && rows.every((r) => selection.selected.has(getRowId(r)))
+                        }
+                        onCheckedChange={(on) => {
+                          const next = new Set(selection.selected);
+                          rows.forEach((r) =>
+                            on ? next.add(getRowId(r)) : next.delete(getRowId(r)),
+                          );
+                          selection.onChange(next);
+                        }}
+                      />
+                    </th>
+                  )}
                   {columns.map((c) => {
                     const sorted = sort?.id === c.id;
                     return (
@@ -329,6 +354,20 @@ export function DataTable<T>({
                       rowClassName?.(row),
                     )}
                   >
+                    {selection && (
+                      <td className="w-10 px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          aria-label={`Select ${selection.label?.(row) ?? getRowId(row)}`}
+                          checked={selection.selected.has(getRowId(row))}
+                          onCheckedChange={(on) => {
+                            const next = new Set(selection.selected);
+                            if (on) next.add(getRowId(row));
+                            else next.delete(getRowId(row));
+                            selection.onChange(next);
+                          }}
+                        />
+                      </td>
+                    )}
                     {columns.map((c) => (
                       <td
                         key={c.id}
@@ -378,7 +417,25 @@ export function DataTable<T>({
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    {selection && (
+                      <span
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          className="mt-0.5"
+                          aria-label={`Select ${selection.label?.(row) ?? getRowId(row)}`}
+                          checked={selection.selected.has(getRowId(row))}
+                          onCheckedChange={(on) => {
+                            const next = new Set(selection.selected);
+                            if (on) next.add(getRowId(row));
+                            else next.delete(getRowId(row));
+                            selection.onChange(next);
+                          }}
+                        />
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
                       <div className="font-medium">{titleCol?.cell(row)}</div>
                       {subtitleCol && (
                         <div className="mt-0.5 text-sm text-muted-foreground">

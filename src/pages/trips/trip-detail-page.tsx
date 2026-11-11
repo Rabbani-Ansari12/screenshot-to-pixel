@@ -20,6 +20,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Timeline } from "@/components/timeline";
 import { useTrip } from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
+import { DriverLinkCard } from "@/components/driver-link-card";
 import { WeightDialog } from "./weight-dialog";
 import { formatDateTime, formatINR, formatNumber, formatQty, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -150,7 +151,7 @@ function WeighCard({
       ) : (
         <EmptyState
           title="Waiting for delivery slip"
-          description="It will be filled automatically when the site sends the unloading slip on WhatsApp."
+          description="It fills in automatically when the unloading slip is uploaded (by staff or through the driver link)."
           className="py-6"
         />
       )}
@@ -387,6 +388,10 @@ function TripDetail({ data }: { data: NonNullable<ReturnType<typeof useTrip>["da
             ]}
           />
         </SectionCard>
+      </div>
+
+      <div className="mt-4">
+        <DriverLinkCard tripCode={t.id} vehicle={t.vehiclePlate} />
       </div>
 
       <SectionCard title={`Linked documents (${documents.length})`} className="mt-4">

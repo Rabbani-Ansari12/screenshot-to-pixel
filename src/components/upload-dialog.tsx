@@ -1,5 +1,16 @@
 import { useMemo, useRef, useState } from "react";
-import { Camera, FileUp, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  Camera,
+  CheckCircle2,
+  FileUp,
+  Loader2,
+  Trash2,
+  UploadCloud,
+  XCircle,
+} from "lucide-react";
+import { toast } from "sonner";
 import type { DocumentType } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,8 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EntityPicker } from "@/components/entity-picker";
-import { api, useAction, useOpenTrips } from "@/hooks/queries";
-import { ACCEPTED, MAX_BYTES } from "@/lib/upload-prep";
+import { api, useOpenTrips } from "@/hooks/queries";
+import { ACCEPTED, MAX_BYTES, prepareUpload, type PreparedUpload } from "@/lib/upload-prep";
 import { cn } from "@/lib/utils";
 
 const AUTO = "auto";
@@ -37,13 +48,31 @@ const TYPES: DocumentType[] = [
 ];
 const MAX_FILES = 20;
 
+type FileState = "preparing" | "ready" | "uploading" | "done" | "failed";
+
 interface Pending {
+  key: string;
   file: File;
   type: DocumentType | typeof AUTO;
+  state: FileState;
+  prepared?: PreparedUpload;
+  /** Same file already stored (by content hash). */
+  existing?: { id: string; ref: string };
+  error?: string;
 }
 
 const accepted = (f: File) =>
   ACCEPTED.includes(f.type) || /\.(jpe?g|png|webp|heic|heif|pdf)$/i.test(f.name);
+
+const STATE_ICON: Record<FileState, React.ReactNode> = {
+  preparing: (
+    <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="Preparing" />
+  ),
+  ready: null,
+  uploading: <Loader2 className="size-4 animate-spin text-primary" aria-label="Uploading" />,
+  done: <CheckCircle2 className="size-4 text-emerald-600" aria-label="Uploaded" />,
+  failed: <XCircle className="size-4 text-destructive" aria-label="Failed" />,
+};
 
 /** Upload slips, bills and photos. They go through AI reading and matching automatically. */
 export function UploadDialog({
@@ -56,12 +85,14 @@ export function UploadDialog({
   /** Pre-selects a trip (e.g. when uploading from a trip page). */
   tripHint?: string;
 }) {
+  const client = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<Pending[]>([]);
   const [trip, setTrip] = useState(tripHint ?? "");
   const [by, setBy] = useState("");
   const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const { data: openTrips } = useOpenTrips(open);
   const tripOptions = useMemo(
@@ -73,16 +104,11 @@ export function UploadDialog({
       })),
     [openTrips],
   );
-  const upload = useAction(
-    api.documents.uploadDocuments,
-    (r) => {
-      const dup = r.filter((x) => x.duplicate).length;
-      return `${r.length} document${r.length > 1 ? "s" : ""} uploaded · reading started${dup ? ` · ${dup} already uploaded before (kept as duplicate)` : ""}`;
-    },
-    { invalidate: [["documents"], ["review"], ["notifications"]] },
-  );
+  const patch = (key: string, p: Partial<Pending>) =>
+    setFiles((all) => all.map((f) => (f.key === key ? { ...f, ...p } : f)));
 
-  const add = (list: FileList | null) => {
+  /** Prepare (resize, convert, hash) as soon as files are added, then check for duplicates. */
+  const add = async (list: FileList | null) => {
     if (!list) return;
     setProblem(null);
     const incoming = Array.from(list);
@@ -91,38 +117,90 @@ export function UploadDialog({
       setProblem(
         `${bad.map((f) => f.name).join(", ")}: use JPG, PNG, WebP, HEIC or PDF under 20 MB.`,
       );
-    setFiles((current) =>
-      [
-        ...current,
-        ...incoming
-          .filter((f) => !bad.includes(f))
-          .map((file) => ({ file, type: AUTO as typeof AUTO })),
-      ].slice(0, MAX_FILES),
-    );
+    const fresh = incoming
+      .filter((f) => !bad.includes(f))
+      .slice(0, Math.max(0, MAX_FILES - files.length))
+      .map((file) => ({
+        key: crypto.randomUUID(),
+        file,
+        type: AUTO as typeof AUTO,
+        state: "preparing" as FileState,
+      }));
+    setFiles((cur) => [...cur, ...fresh]);
+    const ready: { key: string; sha: string }[] = [];
+    for (const f of fresh) {
+      try {
+        const prepared = await prepareUpload(f.file);
+        patch(f.key, { prepared, state: "ready" });
+        ready.push({ key: f.key, sha: prepared.sha256 });
+      } catch (e) {
+        patch(f.key, {
+          state: "failed",
+          error: e instanceof Error ? e.message : "Cannot read this file",
+        });
+      }
+    }
+    try {
+      const existing = await api.documents.findByHashes(ready.map((r) => r.sha));
+      for (const r of ready) {
+        const hit = existing.get(r.sha);
+        if (hit) patch(r.key, { existing: hit });
+      }
+    } catch {
+      /* duplicate check is a convenience; the server still detects duplicates */
+    }
   };
+
   const reset = () => {
     setFiles([]);
     setProblem(null);
     setBy("");
     setTrip(tripHint ?? "");
   };
+
+  const toUpload = files.filter((f) => f.state === "ready");
   const submit = async () => {
-    await upload.mutateAsync(
-      files.map((f) => ({
-        file: f.file,
-        typeHint: f.type === AUTO ? null : f.type,
-        tripHint: trip || null,
-        uploadedByLabel: by,
-      })),
+    setBusy(true);
+    let ok = 0;
+    let duplicates = 0;
+    for (const f of toUpload) {
+      patch(f.key, { state: "uploading" });
+      try {
+        const r = await api.documents.uploadOne({
+          file: f.file,
+          ...(f.prepared ? { prepared: f.prepared } : {}),
+          typeHint: f.type === AUTO ? null : f.type,
+          tripHint: trip || null,
+          uploadedByLabel: by,
+        });
+        ok++;
+        if (r.duplicate) duplicates++;
+        patch(f.key, { state: "done" });
+      } catch (e) {
+        patch(f.key, { state: "failed", error: e instanceof Error ? e.message : "Upload failed" });
+      }
+    }
+    setBusy(false);
+    await Promise.all(
+      [["documents"], ["review"], ["notifications"], ["links"]].map((queryKey) =>
+        client.invalidateQueries({ queryKey }),
+      ),
     );
-    reset();
-    onOpenChange(false);
+    if (ok)
+      toast.success(
+        `${ok} document${ok > 1 ? "s" : ""} uploaded · reading started${duplicates ? ` · ${duplicates} kept as duplicate` : ""}`,
+      );
+    if (ok === toUpload.length) {
+      reset();
+      onOpenChange(false);
+    }
   };
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
+        if (busy) return;
         if (!o) reset();
         onOpenChange(o);
       }}
@@ -144,7 +222,7 @@ export function UploadDialog({
           onDrop={(e) => {
             e.preventDefault();
             setDrag(false);
-            add(e.dataTransfer.files);
+            void add(e.dataTransfer.files);
           }}
           className={cn(
             "flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
@@ -162,6 +240,7 @@ export function UploadDialog({
               variant="outline"
               size="sm"
               onClick={() => input.current?.click()}
+              disabled={busy}
             >
               <FileUp className="size-4" /> Choose files
             </Button>
@@ -170,6 +249,7 @@ export function UploadDialog({
               variant="outline"
               size="sm"
               onClick={() => camera.current?.click()}
+              disabled={busy}
             >
               <Camera className="size-4" /> Take photo
             </Button>
@@ -181,7 +261,7 @@ export function UploadDialog({
             accept="image/*,application/pdf,.heic,.heif"
             className="sr-only"
             onChange={(e) => {
-              add(e.target.files);
+              void add(e.target.files);
               e.target.value = "";
             }}
             aria-label="Choose files to upload"
@@ -193,7 +273,7 @@ export function UploadDialog({
             capture="environment"
             className="sr-only"
             onChange={(e) => {
-              add(e.target.files);
+              void add(e.target.files);
               e.target.value = "";
             }}
             aria-label="Take a photo with the camera"
@@ -205,63 +285,72 @@ export function UploadDialog({
           </p>
         )}
         {files.length > 0 && (
-          <ul className="max-h-56 space-y-2 overflow-y-auto">
-            {files.map((f, i) => (
-              <li
-                key={`${f.file.name}-${i}`}
-                className="flex items-center gap-3 rounded-lg border p-2.5"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{f.file.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(f.file.size / 1024).toFixed(0)} KB
-                  </p>
-                </div>
-                <Select
-                  value={f.type}
-                  onValueChange={(v) =>
-                    setFiles((all) =>
-                      all.map((x, j) => (j === i ? { ...x, type: v as Pending["type"] } : x)),
-                    )
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-[170px]"
-                    aria-label={`Document type for ${f.file.name}`}
+          <ul className="max-h-64 space-y-2 overflow-y-auto" aria-label="Files to upload">
+            {files.map((f) => (
+              <li key={f.key} className="rounded-lg border p-2.5">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-5 place-items-center">{STATE_ICON[f.state]}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{f.file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {((f.prepared?.blob.size ?? f.file.size) / 1024).toFixed(0)} KB
+                      {f.prepared?.width
+                        ? ` · resized to ${f.prepared.width}×${f.prepared.height}`
+                        : ""}
+                    </p>
+                  </div>
+                  <Select
+                    value={f.type}
+                    disabled={busy || f.state === "done"}
+                    onValueChange={(v) => patch(f.key, { type: v as Pending["type"] })}
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={AUTO}>Let AI decide</SelectItem>
-                    {TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  onClick={() => setFiles((all) => all.filter((_, j) => j !== i))}
-                  aria-label={`Remove ${f.file.name}`}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+                    <SelectTrigger
+                      className="h-8 w-[160px]"
+                      aria-label={`Document type for ${f.file.name}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={AUTO}>Let AI decide</SelectItem>
+                      {TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    disabled={busy}
+                    onClick={() => setFiles((all) => all.filter((x) => x.key !== f.key))}
+                    aria-label={`Remove ${f.file.name}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+                {f.existing && f.state !== "done" && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="size-3.5" />
+                    Already uploaded as {f.existing.ref}. It will be kept as a duplicate and not
+                    read again — remove it if you sent it by mistake.
+                  </p>
+                )}
+                {f.error && <p className="mt-1.5 text-xs text-destructive">{f.error}</p>}
               </li>
             ))}
           </ul>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Trip (optional)</Label>
+            <Label>Related trip (optional)</Label>
             <EntityPicker
               value={trip}
               onChange={setTrip}
               options={tripOptions}
               placeholder="Let AI match the trip"
-              aria-label="Trip this belongs to"
+              aria-label="Related trip"
             />
             <p className="text-xs text-muted-foreground">
               The vehicle on the slip is still checked.
@@ -279,12 +368,15 @@ export function UploadDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={!files.length || upload.isPending}>
-            {upload.isPending && <Loader2 className="size-4 animate-spin" />}Upload{" "}
-            {files.length || ""} file{files.length === 1 ? "" : "s"}
+          <Button
+            onClick={() => void submit()}
+            disabled={!toUpload.length || busy || files.some((f) => f.state === "preparing")}
+          >
+            {busy && <Loader2 className="size-4 animate-spin" />}Upload {toUpload.length || ""} file
+            {toUpload.length === 1 ? "" : "s"}
           </Button>
         </DialogFooter>
       </DialogContent>

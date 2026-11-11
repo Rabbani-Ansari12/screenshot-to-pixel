@@ -27,7 +27,7 @@ describe("documents", () => {
       ref: `DOC-${ID.docRecorded.slice(0, 8).toUpperCase()}`,
       type: "Unloading Slip",
       status: "Automatically Recorded",
-      source: "Staff Upload",
+      source: "Driver Link",
       senderName: "Ramesh (driver)",
       link: { type: "Trip", id: TRIP_CODE },
       confidence: 95,

@@ -63,6 +63,7 @@ import { EmployeesPage } from "@/pages/admin/employees-page";
 import { AuditPage } from "@/pages/admin/audit-page";
 import { SettingsPage } from "@/pages/admin/settings-page";
 import { LoginPage } from "@/pages/auth/login-page";
+import { UploadsPage } from "@/pages/uploads-page";
 
 beforeAll(() => {
   vi.stubGlobal(
@@ -104,6 +105,7 @@ const PAGES: [string, RegExp, () => ReactNode][] = [
     () => <DocumentDetailPage documentId={ID.docRecorded} />,
   ],
   ["/review", /Review Queue/, () => <ReviewPage />],
+  ["/uploads", /Uploads & Links/, () => <UploadsPage />],
   [`/review/${ID.docReview}`, /Decision/, () => <ReviewDetailPage itemId={ID.docReview} />],
   ["/orders", /Customer Orders/, () => <OrdersPage />],
   ["/orders/new", /New customer order/, () => <OrderFormPage />],

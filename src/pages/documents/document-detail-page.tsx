@@ -175,7 +175,8 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
         badge={<StatusBadge status={doc.status} />}
         description={
           <>
-            Uploaded by <span className="font-medium text-foreground">{doc.senderName}</span> ·{" "}
+            {doc.source === "Driver Link" ? "Sent through the driver link by" : "Uploaded by"}{" "}
+            <span className="font-medium text-foreground">{doc.senderName}</span> ·{" "}
             {formatDateTime(doc.receivedAt)}
             {doc.tripHint ? ` · for ${doc.tripHint.label}` : ""}
           </>

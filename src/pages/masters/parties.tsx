@@ -107,7 +107,7 @@ export function ProvidersPage() {
     <>
       <PageHeader
         title="Material Providers"
-        description="Quarries, crushers, depots and mills we buy from. Providers don't log in — their slips and bills arrive on WhatsApp."
+        description="Quarries, crushers, depots and mills we buy from. Providers don't log in — their slips and bills are uploaded by staff or drivers."
         actions={
           can("manage_orders") && (
             <Button onClick={() => setOpen(true)}>
@@ -156,7 +156,7 @@ export function ProvidersPage() {
           { name: "contactName", label: "Contact person" },
           {
             name: "phone",
-            label: "WhatsApp number",
+            label: "Phone number",
             type: "tel",
             hint: "Documents from this number are matched to the provider",
           },
@@ -280,7 +280,7 @@ export function ProviderDetailPage({ providerId }: { providerId: string }) {
               columns={3}
               items={[
                 { label: "Contact", value: p.contactName },
-                { label: "WhatsApp / phone", value: p.phone },
+                { label: "Phone", value: p.phone },
                 { label: "GSTIN", value: p.gstin },
                 { label: "City", value: p.city },
                 { label: "Materials", value: p.materialNames.join(", ") },
@@ -419,7 +419,7 @@ export function TransportersPage() {
           { name: "city", label: "City" },
           { name: "gstin", label: "GSTIN" },
           { name: "contactName", label: "Contact person" },
-          { name: "phone", label: "WhatsApp number", type: "tel" },
+          { name: "phone", label: "Phone number", type: "tel" },
           { name: "ratePerTrip", label: "Default rate per trip (₹)", type: "number" },
         ]}
         onSubmit={(v) => add.mutateAsync(v)}

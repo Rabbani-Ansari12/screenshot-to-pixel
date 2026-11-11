@@ -21,6 +21,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShortagesRouteImport } from './routes/shortages'
 import { Route as StockRouteImport } from './routes/stock'
+import { Route as UploadsRouteImport } from './routes/uploads'
 import { Route as BillsBillIdRouteImport } from './routes/bills/$billId'
 import { Route as BillsProviderRouteImport } from './routes/bills/provider'
 import { Route as BillsTransporterRouteImport } from './routes/bills/transporter'
@@ -51,6 +52,7 @@ import { Route as TransportersTransporterIdRouteImport } from './routes/transpor
 import { Route as TripsIndexRouteImport } from './routes/trips/index'
 import { Route as TripsTripIdRouteImport } from './routes/trips/$tripId'
 import { Route as TripsNewRouteImport } from './routes/trips/new'
+import { Route as UTokenRouteImport } from './routes/u.$token'
 import { Route as VehiclesIndexRouteImport } from './routes/vehicles/index'
 import { Route as VehiclesVehicleIdRouteImport } from './routes/vehicles/$vehicleId'
 import { Route as OrdersEditOrderIdRouteImport } from './routes/orders/edit/$orderId'
@@ -113,6 +115,11 @@ const ShortagesRoute = ShortagesRouteImport.update({
 const StockRoute = StockRouteImport.update({
   id: '/stock',
   path: '/stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UploadsRoute = UploadsRouteImport.update({
+  id: '/uploads',
+  path: '/uploads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillsBillIdRoute = BillsBillIdRouteImport.update({
@@ -266,6 +273,11 @@ const TripsNewRoute = TripsNewRouteImport.update({
   path: '/trips/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UTokenRoute = UTokenRouteImport.update({
+  id: '/u/$token',
+  path: '/u/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VehiclesIndexRoute = VehiclesIndexRouteImport.update({
   id: '/vehicles/',
   path: '/vehicles/',
@@ -295,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
+  '/uploads': typeof UploadsRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
   '/bills/transporter': typeof BillsTransporterRoute
@@ -313,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/transporters/$transporterId': typeof TransportersTransporterIdRoute
   '/trips/$tripId': typeof TripsTripIdRoute
   '/trips/new': typeof TripsNewRoute
+  '/u/$token': typeof UTokenRoute
   '/vehicles/$vehicleId': typeof VehiclesVehicleIdRoute
   '/customers/': typeof CustomersIndexRoute
   '/documents/': typeof DocumentsIndexRoute
@@ -342,6 +356,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
+  '/uploads': typeof UploadsRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
   '/bills/transporter': typeof BillsTransporterRoute
@@ -360,6 +375,7 @@ export interface FileRoutesByTo {
   '/transporters/$transporterId': typeof TransportersTransporterIdRoute
   '/trips/$tripId': typeof TripsTripIdRoute
   '/trips/new': typeof TripsNewRoute
+  '/u/$token': typeof UTokenRoute
   '/vehicles/$vehicleId': typeof VehiclesVehicleIdRoute
   '/customers': typeof CustomersIndexRoute
   '/documents': typeof DocumentsIndexRoute
@@ -390,6 +406,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
+  '/uploads': typeof UploadsRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
   '/bills/transporter': typeof BillsTransporterRoute
@@ -408,6 +425,7 @@ export interface FileRoutesById {
   '/transporters/$transporterId': typeof TransportersTransporterIdRoute
   '/trips/$tripId': typeof TripsTripIdRoute
   '/trips/new': typeof TripsNewRoute
+  '/u/$token': typeof UTokenRoute
   '/vehicles/$vehicleId': typeof VehiclesVehicleIdRoute
   '/customers/': typeof CustomersIndexRoute
   '/documents/': typeof DocumentsIndexRoute
@@ -439,6 +457,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
+    | '/uploads'
     | '/bills/$billId'
     | '/bills/provider'
     | '/bills/transporter'
@@ -457,6 +476,7 @@ export interface FileRouteTypes {
     | '/transporters/$transporterId'
     | '/trips/$tripId'
     | '/trips/new'
+    | '/u/$token'
     | '/vehicles/$vehicleId'
     | '/customers/'
     | '/documents/'
@@ -486,6 +506,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
+    | '/uploads'
     | '/bills/$billId'
     | '/bills/provider'
     | '/bills/transporter'
@@ -504,6 +525,7 @@ export interface FileRouteTypes {
     | '/transporters/$transporterId'
     | '/trips/$tripId'
     | '/trips/new'
+    | '/u/$token'
     | '/vehicles/$vehicleId'
     | '/customers'
     | '/documents'
@@ -533,6 +555,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
+    | '/uploads'
     | '/bills/$billId'
     | '/bills/provider'
     | '/bills/transporter'
@@ -551,6 +574,7 @@ export interface FileRouteTypes {
     | '/transporters/$transporterId'
     | '/trips/$tripId'
     | '/trips/new'
+    | '/u/$token'
     | '/vehicles/$vehicleId'
     | '/customers/'
     | '/documents/'
@@ -581,6 +605,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ShortagesRoute: typeof ShortagesRoute
   StockRoute: typeof StockRoute
+  UploadsRoute: typeof UploadsRoute
   BillsBillIdRoute: typeof BillsBillIdRoute
   BillsProviderRoute: typeof BillsProviderRoute
   BillsTransporterRoute: typeof BillsTransporterRoute
@@ -599,6 +624,7 @@ export interface RootRouteChildren {
   TransportersTransporterIdRoute: typeof TransportersTransporterIdRoute
   TripsTripIdRoute: typeof TripsTripIdRoute
   TripsNewRoute: typeof TripsNewRoute
+  UTokenRoute: typeof UTokenRoute
   VehiclesVehicleIdRoute: typeof VehiclesVehicleIdRoute
   CustomersIndexRoute: typeof CustomersIndexRoute
   DocumentsIndexRoute: typeof DocumentsIndexRoute
@@ -700,6 +726,13 @@ declare module '@tanstack/react-router' {
       path: '/stock'
       fullPath: '/stock'
       preLoaderRoute: typeof StockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/uploads': {
+      id: '/uploads'
+      path: '/uploads'
+      fullPath: '/uploads'
+      preLoaderRoute: typeof UploadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bills/$billId': {
@@ -912,6 +945,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TripsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/u/$token': {
+      id: '/u/$token'
+      path: '/u/$token'
+      fullPath: '/u/$token'
+      preLoaderRoute: typeof UTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vehicles/': {
       id: '/vehicles/'
       path: '/vehicles'
@@ -949,6 +989,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ShortagesRoute: ShortagesRoute,
   StockRoute: StockRoute,
+  UploadsRoute: UploadsRoute,
   BillsBillIdRoute: BillsBillIdRoute,
   BillsProviderRoute: BillsProviderRoute,
   BillsTransporterRoute: BillsTransporterRoute,
@@ -967,6 +1008,7 @@ const rootRouteChildren: RootRouteChildren = {
   TransportersTransporterIdRoute: TransportersTransporterIdRoute,
   TripsTripIdRoute: TripsTripIdRoute,
   TripsNewRoute: TripsNewRoute,
+  UTokenRoute: UTokenRoute,
   VehiclesVehicleIdRoute: VehiclesVehicleIdRoute,
   CustomersIndexRoute: CustomersIndexRoute,
   DocumentsIndexRoute: DocumentsIndexRoute,

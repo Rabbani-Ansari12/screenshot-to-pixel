@@ -31,7 +31,7 @@ export function BillsPage({ kind }: { kind: BillKind }) {
         title={`${kind} Bills`}
         description={
           kind === "Provider"
-            ? "Bills from material providers, read from WhatsApp and checked against loading slips."
+            ? "Bills from material providers, read from uploaded documents and checked against loading slips."
             : "Freight bills from transporters, checked trip by trip."
         }
         actions={
@@ -214,7 +214,7 @@ export function BillDetailPage({ billId }: { billId: string }) {
             </Link>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Bill received before WhatsApp automation (Oct 2026); entered manually.
+              Bill received before document automation (Oct 2026); entered manually.
             </p>
           )}
         </SectionCard>

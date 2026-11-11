@@ -419,3 +419,12 @@ enabled = true
 # Called by pg_net / pg_cron with the x-worker-secret header, not with a user JWT.
 [functions.process-document]
 verify_jwt = false
+
+[functions.driver-upload-info]
+verify_jwt = false
+
+[functions.driver-upload]
+verify_jwt = false
+
+[functions.notify-digest]
+verify_jwt = false

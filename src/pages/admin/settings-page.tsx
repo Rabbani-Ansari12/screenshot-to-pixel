@@ -10,6 +10,7 @@ import {
   DatabaseBackup,
   FileDigit,
   Loader2,
+  Link2,
   Sparkles,
   Receipt,
   Ruler,
@@ -270,6 +271,101 @@ const NOTIFS: { key: NotifKey; label: string; hint: string }[] = [
   },
 ];
 
+const LINK_TYPES = [
+  ["loading_slip", "Loading slip"],
+  ["unloading_slip", "Unloading slip"],
+  ["delivery_photo", "Delivery photo"],
+  ["weighbridge_slip", "Weighbridge slip"],
+  ["other", "Other"],
+] as const;
+
+/** Driver upload links: expiry, uploads per link, allowed types, per-network limit (owner only). */
+function DriverLinkSettingsCard({ settings }: { settings: AppSettings }) {
+  const [v, setV] = useState(settings.driverLinks);
+  const [digest, setDigest] = useState(settings.emailDigest);
+  useEffect(() => setV(settings.driverLinks), [settings.driverLinks]);
+  useEffect(() => setDigest(settings.emailDigest), [settings.emailDigest]);
+  const save = useAction(
+    (patch: Partial<AppSettings>) => api.admin.updateSettings(patch),
+    "Driver link settings saved",
+  );
+  const num = (
+    key: "expiryHours" | "maxUploads" | "rateLimitPerIp",
+    label: string,
+    hint: string,
+  ) => (
+    <div className="space-y-1">
+      <Label htmlFor={`dl-${key}`}>{label}</Label>
+      <Input
+        id={`dl-${key}`}
+        type="number"
+        min={1}
+        step={1}
+        value={Number.isFinite(v[key]) ? v[key] : ""}
+        onChange={(e) => setV((x) => ({ ...x, [key]: e.target.valueAsNumber }))}
+      />
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+  return (
+    <SectionCard
+      title={
+        <span className="flex items-center gap-2">
+          <Link2 className="size-4 text-primary" />
+          Driver upload links
+        </span>
+      }
+      actions={
+        <Button
+          size="sm"
+          disabled={save.isPending || v.allowedDocTypes.length === 0}
+          onClick={() => save.mutate({ driverLinks: v, emailDigest: digest })}
+        >
+          <Save className="size-4" />
+          Save
+        </Button>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-3">
+        {num("expiryHours", "Link valid for (hours)", "Default for new links (1–720).")}
+        {num("maxUploads", "Files per link", "After this the link stops (1–200).")}
+        {num("rateLimitPerIp", "Uploads per hour per network", "Protects against abuse.")}
+      </div>
+      <fieldset className="mt-4">
+        <legend className="mb-2 text-sm font-medium">Drivers may send</legend>
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {LINK_TYPES.map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={v.allowedDocTypes.includes(key)}
+                onCheckedChange={(on) =>
+                  setV((x) => ({
+                    ...x,
+                    allowedDocTypes: on
+                      ? [...new Set([...x.allowedDocTypes, key])]
+                      : x.allowedDocTypes.filter((t) => t !== key),
+                  }))
+                }
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="mt-4 flex items-start justify-between gap-4 border-t pt-4">
+        <div>
+          <Label htmlFor="digest">Daily e-mail summary of exceptions</Label>
+          <p className="text-xs text-muted-foreground">
+            Sent at 6 PM to the owner through Resend. Needs RESEND_API_KEY and NOTIFY_EMAIL_FROM;
+            stays silent until they are set.
+          </p>
+        </div>
+        <Switch id="digest" checked={digest} onCheckedChange={setDigest} />
+      </div>
+    </SectionCard>
+  );
+}
+
 /** AI document reading: daily cost cap and matching thresholds (owner only). */
 function AiSettingsCard({ settings }: { settings: AppSettings }) {
   const [ai, setAi] = useState(settings.ai);
@@ -376,6 +472,7 @@ export function SettingsPage() {
         <BusinessForms settings={settings} />
         <div className="space-y-4">
           <AiSettingsCard settings={settings} />
+          <DriverLinkSettingsCard settings={settings} />
           <SectionCard
             title={
               <span className="flex items-center gap-2">

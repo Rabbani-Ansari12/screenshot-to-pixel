@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
-import type { TripStatus } from "@/types";
+import { Link2, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
+import type { TripStatus, TripView } from "@/types";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table";
 import { ErrorState } from "@/components/common";
 import { PageHeader } from "@/components/page-header";
 import { tripColumns } from "@/components/record-columns";
-import { useMasterOptions, useTripsPage } from "@/hooks/queries";
+import { api, useAction, useMasterOptions, useTripsPage } from "@/hooks/queries";
+import { TripSheetsDialog, type SheetItem } from "@/components/trip-sheets";
 import type { TableQuery } from "@/services/supabase/table-query";
 import { useAuth } from "@/lib/auth";
 
@@ -25,23 +27,58 @@ export function TripsPage() {
   const { data, isLoading, error } = useTripsPage(query);
   const { data: options } = useMasterOptions();
   const { can } = useAuth();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sheets, setSheets] = useState<SheetItem[]>([]);
+  // Trips seen on any page, so a selection across pages still has vehicle / route for the sheets.
+  const seen = useRef(new Map<string, TripView>());
+  useEffect(() => data?.rows.forEach((t) => seen.current.set(t.id, t)), [data]);
+  const bulk = useAction(api.links.createLinks, undefined, { invalidate: [["links"]] });
+  const generate = async () => {
+    const res = await bulk.mutateAsync([...selected]);
+    if (res.failed.length)
+      toast.error(
+        `${res.failed.length} link(s) not created: ${res.failed.map((f) => `${f.tripCode} (${f.error})`).join(", ")}`,
+      );
+    if (res.created.length) {
+      toast.success(
+        `${res.created.length} driver link${res.created.length > 1 ? "s" : ""} created`,
+      );
+      setSheets(res.created.map((link) => ({ link, trip: seen.current.get(link.tripCode) })));
+    }
+    setSelected(new Set());
+  };
   if (error) return <ErrorState error={error} />;
   return (
     <>
       <PageHeader
         title="Truck Trips"
-        description="Every truck from loading to delivery. Weights fill in automatically from WhatsApp slips."
+        description="Every truck from loading to delivery. Weights fill in automatically from uploaded slips."
         actions={
           can("manage_trips") && (
-            <Button asChild variant="outline">
-              <Link to="/trips/new">
-                <Plus className="size-4" /> Create trip (manual)
-              </Link>
-            </Button>
+            <>
+              {selected.size > 0 && (
+                <Button onClick={() => void generate()} disabled={bulk.isPending}>
+                  {bulk.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Link2 className="size-4" />
+                  )}
+                  Generate links for {selected.size} trip{selected.size > 1 ? "s" : ""}
+                </Button>
+              )}
+              <Button asChild variant="outline">
+                <Link to="/trips/new">
+                  <Plus className="size-4" /> Create trip (manual)
+                </Link>
+              </Button>
+            </>
           )
         }
       />
       <DataTable
+        {...(can("manage_trips")
+          ? { selection: { selected, onChange: setSelected, label: (t: TripView) => t.id } }
+          : {})}
         data={data?.rows}
         isLoading={isLoading || !query}
         server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
@@ -81,6 +118,11 @@ export function TripsPage() {
         dateValue={(t) => t.loading.at}
         defaultSort={{ id: "date", desc: true }}
         exportName="truck-trips"
+      />
+      <TripSheetsDialog
+        open={sheets.length > 0}
+        onOpenChange={(o) => !o && setSheets([])}
+        items={sheets}
       />
     </>
   );

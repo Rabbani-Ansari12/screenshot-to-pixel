@@ -275,6 +275,13 @@ export function toAppSettings(
     autoProcessThreshold: Math.round(Number(row.auto_process_confidence_threshold) * 100),
     authoritativeWeight: row.authoritative_weight === "loading" ? "Loading" : "Delivery",
     enabledUnits: row.enabled_units.map(unitFromDb),
+    driverLinks: {
+      expiryHours: row.upload_link_expiry_hours,
+      maxUploads: row.upload_link_max_uploads,
+      allowedDocTypes: row.upload_link_doc_types,
+      rateLimitPerIp: row.upload_rate_limit_per_ip,
+    },
+    emailDigest: row.email_digest_enabled,
     ai: {
       dailyCallCap: row.ai_daily_call_cap,
       callsToday,
@@ -344,6 +351,13 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
     update.auto_process_confidence_threshold = Math.round(patch.autoProcessThreshold) / 100;
   if (patch.authoritativeWeight)
     update.authoritative_weight = patch.authoritativeWeight === "Loading" ? "loading" : "delivery";
+  if (patch.driverLinks) {
+    update.upload_link_expiry_hours = Math.round(patch.driverLinks.expiryHours);
+    update.upload_link_max_uploads = Math.round(patch.driverLinks.maxUploads);
+    update.upload_link_doc_types = patch.driverLinks.allowedDocTypes;
+    update.upload_rate_limit_per_ip = Math.round(patch.driverLinks.rateLimitPerIp);
+  }
+  if (patch.emailDigest !== undefined) update.email_digest_enabled = patch.emailDigest;
   if (patch.ai) {
     update.ai_daily_call_cap = Math.round(patch.ai.dailyCallCap);
     update.net_weight_tolerance = patch.ai.netWeightTolerance;
@@ -388,12 +402,12 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
 export async function listNotifications(): Promise<AppNotification[]> {
   const [{ data: session }, list] = await Promise.all([
     sb().auth.getSession(),
-    sb().from("notifications").select("*").order("created_at", { ascending: false }).limit(50),
+    sb().from("notifications").select("*").order("updated_at", { ascending: false }).limit(50),
   ]);
   const uid = session.session?.user.id ?? "";
   return rows(list).map((n) => ({
     id: n.id,
-    at: n.created_at,
+    at: n.updated_at,
     title: n.title,
     detail: n.detail ?? "",
     href: n.href ?? "/",

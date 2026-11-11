@@ -76,6 +76,9 @@ npm run db:push                 # apply new migrations
 npm run db:types                # regenerate src/types/database.ts
 npx supabase functions deploy admin-manage-employee --use-api
 npx supabase functions deploy process-document --use-api --no-verify-jwt
+npx supabase functions deploy driver-upload-info --use-api --no-verify-jwt
+npx supabase functions deploy driver-upload --use-api --no-verify-jwt
+npx supabase functions deploy notify-digest --use-api --no-verify-jwt
 npm run worker:setup            # worker secret + Vault entries for pg_net / pg_cron
 ```
 
@@ -95,7 +98,8 @@ If your network blocks the Postgres port, the same operations work over HTTPS:
 - Units are never converted (no MT ↔ volume); the database rejects a unit that differs from the
   material's.
 
-Documents are uploaded in the app (files or phone camera) and read by Gemini in the
+Documents come in through staff upload or a per-trip **driver upload link** (no login, `/u/<token>`,
+QR code / share sheet) and are read by Gemini in the
 `process-document` Edge Function — see `docs/intake.md` and `docs/ai-pipeline.md`. Clear slips are
 recorded on their trip automatically; everything else goes to the Review Queue.
 
@@ -138,7 +142,8 @@ src/services              Data access (Supabase; src/services/supabase has mappe
 src/data                  Sample data for modules not yet connected
 src/types                 Domain types + generated database types
 supabase/migrations       Database schema (the only way to change it)
-supabase/functions        Edge Functions (process-document, admin-manage-employee, config-check)
+supabase/functions        Edge Functions (process-document, driver-upload-info, driver-upload,
+                          notify-digest, admin-manage-employee, config-check)
 supabase/tests            pgTAP tests
 e2e/                      Playwright smoke tests
 docs/                     Schema (ERD) and secrets documentation

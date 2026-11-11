@@ -84,23 +84,28 @@ async function main() {
   await api("/database/query", {
     method: "POST",
     body: JSON.stringify({
-      query: upsert("document_worker_secret", secret) + upsert("process_document_url", url),
+      query:
+        upsert("document_worker_secret", secret) +
+        upsert("process_document_url", url) +
+        upsert("notify_digest_url", `https://${ref}.supabase.co/functions/v1/notify-digest`),
     }),
   });
-  console.log("✓ Vault secrets document_worker_secret and process_document_url set");
+  console.log(
+    "✓ Vault secrets document_worker_secret, process_document_url and notify_digest_url set",
+  );
 
   const check = JSON.parse(
     await api("/database/query", {
       method: "POST",
       body: JSON.stringify({
         query:
-          "select (select count(*) from vault.decrypted_secrets where name in ('document_worker_secret','process_document_url')) as vault_entries, " +
-          "(select count(*) from cron.job where jobname = 'process-documents') as cron_jobs",
+          "select (select count(*) from vault.decrypted_secrets where name in ('document_worker_secret','process_document_url','notify_digest_url')) as vault_entries, " +
+          "(select count(*) from cron.job where jobname in ('process-documents','notify-digest')) as cron_jobs",
       }),
     }),
   ) as { vault_entries: number; cron_jobs: number }[];
   console.log(
-    `✓ check: ${check[0]?.vault_entries ?? 0}/2 vault entries, ${check[0]?.cron_jobs ?? 0} cron job`,
+    `✓ check: ${check[0]?.vault_entries ?? 0}/3 vault entries, ${check[0]?.cron_jobs ?? 0}/2 cron jobs`,
   );
 }
 

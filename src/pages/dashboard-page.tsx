@@ -209,7 +209,7 @@ export function DashboardPage() {
               <Bot className="size-4 text-primary" /> AI automation
             </span>
           }
-          description="Documents received on WhatsApp and handled without anyone typing."
+          description="Documents received and handled without anyone typing."
         >
           <div className="grid gap-5 sm:grid-cols-[160px_1fr] sm:items-center">
             <div className="relative mx-auto size-40">

@@ -208,7 +208,7 @@ export function PurchaseDetailPage({ purchaseId }: { purchaseId: string }) {
           </ul>
         ) : (
           <InfoNote>
-            No documents attached. Slips received before WhatsApp automation went live (Oct 2026)
+            No documents attached. Slips received before document automation went live (Oct 2026)
             were entered manually.
           </InfoNote>
         )}

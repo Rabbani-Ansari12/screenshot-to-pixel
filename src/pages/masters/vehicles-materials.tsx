@@ -214,7 +214,7 @@ export function VehiclesPage() {
           { name: "type", label: "Vehicle type" },
           { name: "capacity", label: "Capacity (MT)", type: "number" },
           { name: "driverName", label: "Driver name" },
-          { name: "driverPhone", label: "Driver WhatsApp", type: "tel" },
+          { name: "driverPhone", label: "Driver phone", type: "tel" },
           { name: "licenseNo", label: "Driving licence no.", full: true },
         ]}
         onSubmit={(v) => add.mutateAsync(v)}
@@ -343,7 +343,7 @@ export function VehicleDetailPage({ vehicleId }: { vehicleId: string }) {
               { label: "Driver", value: driver?.name ?? "—" },
               { label: "Driver phone", value: driver?.phone ?? "—" },
               { label: "Licence", value: driver?.licenseNo ?? "—" },
-              { label: "Login", value: "None — drivers send slips on WhatsApp" },
+              { label: "Login", value: "None — drivers send slips through the trip upload link" },
             ]}
           />
         </SectionCard>

@@ -256,7 +256,7 @@ events.push(
     entityId: "SETTINGS",
     entityLabel: "Auto-processing threshold",
     changes: [{ field: "Confidence threshold", from: "90%", to: "85%" }],
-    note: "WhatsApp automation go-live.",
+    note: "Document automation go-live.",
   },
 );
 
@@ -287,6 +287,13 @@ export const settings: AppSettings = {
   autoProcessThreshold: 85,
   authoritativeWeight: "Delivery",
   enabledUnits: ["MT", "Brass", "Trips", "CFT", "m³"],
+  driverLinks: {
+    expiryHours: 72,
+    maxUploads: 20,
+    allowedDocTypes: ["loading_slip", "unloading_slip", "delivery_photo", "other"],
+    rateLimitPerIp: 30,
+  },
+  emailDigest: false,
   ai: {
     dailyCallCap: 300,
     callsToday: 0,
