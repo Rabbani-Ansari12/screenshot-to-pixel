@@ -227,9 +227,14 @@ export function toDashboard(raw: Raw): DashboardData {
   };
 }
 
+/** `month` is "yyyy-MM" or "yyyy-MM-dd"; anything else means the current month. */
 export async function getDashboard(month?: string): Promise<DashboardData> {
+  const valid = typeof month === "string" && /^\d{4}-\d{2}(-\d{2})?$/.test(month);
   const raw = unwrap(
-    await sb().rpc("dashboard_summary", month ? { p_month: month } : {}),
+    await sb().rpc(
+      "dashboard_summary",
+      valid ? { p_month: month.length === 7 ? `${month}-01` : month } : {},
+    ),
   ) as unknown as Raw;
   return toDashboard(raw);
 }

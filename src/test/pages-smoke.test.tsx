@@ -99,7 +99,12 @@ function signInAs(userId: string | null) {
     userId,
     rpc: {
       finance_totals: () => FINANCE_TOTALS,
-      dashboard_summary: () => DASHBOARD_SUMMARY,
+      dashboard_summary: (args) => {
+        // The database only accepts a yyyy-MM-dd month (or nothing).
+        if (args["p_month"] !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(args["p_month"])))
+          throw new Error(`invalid input syntax for type date: ${JSON.stringify(args["p_month"])}`);
+        return DASHBOARD_SUMMARY;
+      },
       report_run: reportRun,
     },
     functions: {

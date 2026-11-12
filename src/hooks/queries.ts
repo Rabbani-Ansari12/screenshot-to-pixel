@@ -34,7 +34,7 @@ const q = <T>(key: unknown[], fn: () => Promise<T>, enabled = true) => ({
 });
 
 // ---------- Reads ----------
-export const useDashboard = () => useQuery(q(["dashboard"], dashboard.getDashboard));
+export const useDashboard = () => useQuery(q(["dashboard"], () => dashboard.getDashboard()));
 export const useDocuments = () => useQuery(q(["documents"], documents.listDocuments));
 export const useDocument = (id: string) =>
   useQuery(q(["documents", id], () => documents.getDocument(id), Boolean(id)));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDownLeft, ArrowUpRight, Plus, Wallet } from "lucide-react";
 import type { PartyBalance } from "@/types";
@@ -29,15 +29,17 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 function PaymentsTable({ direction }: { direction: "Incoming" | "Outgoing" }) {
   const [query, setQuery] = useState<TableQuery | null>(null);
   const { data, isLoading, error } = usePaymentsPage(query);
+  // Stable callback: the table reports its query whenever this function changes.
+  const onQueryChange = useCallback(
+    (q: TableQuery) => setQuery({ ...q, filters: { ...q.filters, direction } }),
+    [direction],
+  );
   if (error) return <ErrorState error={error} />;
   return (
     <DataTable
       data={data?.rows}
       isLoading={isLoading || !query}
-      server={{
-        total: data?.total ?? 0,
-        onQueryChange: (q) => setQuery({ ...q, filters: { ...q.filters, direction } }),
-      }}
+      server={{ total: data?.total ?? 0, onQueryChange }}
       columns={paymentColumns()}
       getRowId={(p) => p.id}
       searchText={(p) => `${p.ref} ${p.partyName} ${p.againstLabel} ${p.reference}`}
