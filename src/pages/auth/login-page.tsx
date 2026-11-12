@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { takeRedirect } from "@/components/protected-route";
 import { useAuth } from "@/lib/auth";
 import { AuthLayout } from "./auth-layout";
+import { PasswordInput } from "@/components/password-input";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -100,7 +101,7 @@ export function LoginPage() {
                   </Link>
                 </div>
                 <FormControl>
-                  <Input type="password" autoComplete="current-password" {...field} />
+                  <PasswordInput autoComplete="current-password" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
