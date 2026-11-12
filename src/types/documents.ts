@@ -61,6 +61,8 @@ export interface DocumentRecord {
   id: ID;
   /** Short display reference (live documents have uuid ids). */
   ref?: string;
+  /** Path in the private documents bucket (previews live at <path>.thumb.jpg). */
+  storagePath?: string;
   type: DocumentType;
   fileName: string;
   pages: number;

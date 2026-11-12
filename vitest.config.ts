@@ -11,6 +11,10 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}", "supabase/functions/**/*.test.ts"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: [
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+      // Edge Function imports (Deno npm: specifiers) resolve to the same packages under Node.
+      { find: /^npm:zod@[\d.]+$/, replacement: "zod" },
+    ],
   },
 });

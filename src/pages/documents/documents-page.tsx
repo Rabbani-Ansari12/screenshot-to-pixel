@@ -90,7 +90,7 @@ export function DocumentsPage() {
           className="flex items-center gap-3"
           onClick={(e) => e.stopPropagation()}
         >
-          <DocumentThumbnail type={d.type} />
+          <DocumentThumbnail type={d.type} storagePath={d.storagePath} />
           <span className="min-w-0">
             <span className="block font-medium hover:underline">{d.type}</span>
             <span className="block truncate text-xs text-muted-foreground">
@@ -232,7 +232,7 @@ export function DocumentsPage() {
             className="block rounded-xl border bg-background p-4 transition-shadow hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-2">
-              <DocumentThumbnail type={d.type} className="size-12" />
+              <DocumentThumbnail type={d.type} storagePath={d.storagePath} className="size-12" />
               <StatusBadge status={d.status} />
             </div>
             <p className="mt-3 font-medium">{d.type}</p>

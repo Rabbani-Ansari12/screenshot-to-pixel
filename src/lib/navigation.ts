@@ -1,4 +1,5 @@
 import {
+  Activity,
   ArrowDownToLine,
   ArrowLeftRight,
   BarChart3,
@@ -138,6 +139,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Employees & Permissions", path: "/employees", icon: Users, requires: "owner" },
       { label: "Audit History", path: "/audit", icon: FileClock, requires: "owner" },
+      { label: "System Health", path: "/system", icon: Activity, requires: "owner" },
       { label: "Settings", path: "/settings", icon: Settings2, requires: "owner" },
     ],
   },
@@ -171,10 +173,9 @@ export const isPublicPath = (pathname: string) =>
  * Pages whose data still comes from the built-in sample data (src/data) until their module is
  * connected to Supabase. The app shell shows a notice on these pages.
  */
-/** Pages still on sample data (the dashboard "/" is handled separately). */
-export const SAMPLE_DATA_PREFIXES = ["/reports"];
+/** Pages still on sample data. Every page now reads live data. */
+export const SAMPLE_DATA_PREFIXES: string[] = [];
 
 export function usesSampleData(pathname: string): boolean {
-  if (pathname === "/") return true;
   return SAMPLE_DATA_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }

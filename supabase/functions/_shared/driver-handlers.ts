@@ -16,6 +16,19 @@ import {
   sha256Hex,
   sniffMime,
 } from "./driver-link.ts";
+import { z } from "./zod.ts";
+
+/** Previews are at most 200 KB (the phone makes them ~320 px wide). */
+export const MAX_THUMB_BYTES = 200 * 1024;
+
+/** Text fields of the public upload form (files are checked separately by their bytes). */
+const UploadFields = z.object({
+  token: z.string().max(64),
+  doc_type: z.string().max(40),
+  driver_name: z.string().max(500).nullable(),
+  turnstile: z.string().max(4096).nullable(),
+});
+const InfoQuery = z.object({ token: z.string().max(64) });
 
 export interface LinkInfo {
   token_hash: string;
@@ -77,7 +90,8 @@ export async function handleInfo(req: Request, deps: PublicDeps): Promise<Respon
   const ipHash = (await sha256Hex(clientIp(req.headers))).slice(0, 32);
   if (!(await deps.rateLimit(`info:ip:${ipHash}`, INFO_RATE_LIMIT_PER_IP)))
     return json({ error: RATE_LIMIT_ERROR }, 429, cors);
-  const { info, hash } = await checkLink(deps, new URL(req.url).searchParams.get("token"));
+  const query = InfoQuery.safeParse({ token: new URL(req.url).searchParams.get("token") ?? "" });
+  const { info, hash } = await checkLink(deps, query.success ? query.data.token : null);
   if (!info) {
     deps.log("link_rejected", { where: "info", token: hash ? hash.slice(0, 8) : "malformed" });
     return json({ error: GENERIC_LINK_ERROR }, 404, cors);
@@ -110,9 +124,15 @@ export async function handleUpload(req: Request, deps: PublicDeps): Promise<Resp
   } catch {
     return json({ error: "Could not read the upload. Please try again." }, 400, cors);
   }
+  const fields = UploadFields.safeParse({
+    token: form.get("token") ?? "",
+    doc_type: form.get("doc_type") ?? "",
+    driver_name: form.get("driver_name"),
+    turnstile: form.get("cf-turnstile-response"),
+  });
   const ip = clientIp(req.headers);
   const ipHash = (await sha256Hex(ip)).slice(0, 32);
-  const { info, hash } = await checkLink(deps, form.get("token"));
+  const { info, hash } = await checkLink(deps, fields.success ? fields.data.token : null);
 
   // Count every attempt, valid or not, against the network and the link.
   if (!(await deps.rateLimit(`upload:ip:${ipHash}`, info?._rate_limit_per_ip ?? 30)))
@@ -130,7 +150,8 @@ export async function handleUpload(req: Request, deps: PublicDeps): Promise<Resp
       return json({ error: "Please confirm you are not a robot and try again." }, 403, cors);
   }
 
-  const docType = String(form.get("doc_type") ?? "");
+  if (!fields.success) return json({ error: "Choose what kind of document this is." }, 400, cors);
+  const docType = fields.data.doc_type;
   if (!info.allowed_doc_types.includes(docType))
     return json({ error: "Choose what kind of document this is." }, 400, cors);
   const driverName = cleanDriverName(form.get("driver_name"));
@@ -143,17 +164,34 @@ export async function handleUpload(req: Request, deps: PublicDeps): Promise<Resp
   if (files.length > info.remaining_uploads)
     return json({ error: `This link allows ${info.remaining_uploads} more file(s).` }, 400, cors);
 
-  const prepared: { bytes: Uint8Array; mime: string; ext: string; name: string }[] = [];
-  for (const f of files) {
+  // Optional small JPEG previews made by the phone, in the same order as the files.
+  const thumbs = form
+    .getAll("thumbs")
+    .map((f) => (typeof f === "object" && f !== null && "arrayBuffer" in f ? (f as File) : null));
+  const prepared: {
+    bytes: Uint8Array;
+    mime: string;
+    ext: string;
+    name: string;
+    thumb: Uint8Array | null;
+  }[] = [];
+  for (const [i, f] of files.entries()) {
     if (f.size > MAX_FILE_BYTES || f.size === 0) return json({ error: FILE_ERROR }, 415, cors);
     const bytes = new Uint8Array(await f.arrayBuffer());
     const sniffed = sniffMime(bytes.subarray(0, 32));
     if (!sniffed) return json({ error: FILE_ERROR }, 415, cors);
+    const t = thumbs[i];
+    let thumb: Uint8Array | null = null;
+    if (t && t.size > 0 && t.size <= MAX_THUMB_BYTES) {
+      const tb = new Uint8Array(await t.arrayBuffer());
+      if (sniffMime(tb.subarray(0, 32))?.mime === "image/jpeg") thumb = tb;
+    }
     prepared.push({
       bytes,
       mime: sniffed.mime,
       ext: sniffed.ext,
       name: (f.name || `photo.${sniffed.ext}`).slice(0, 120),
+      thumb,
     });
   }
 
@@ -178,6 +216,8 @@ export async function handleUpload(req: Request, deps: PublicDeps): Promise<Resp
         driverName,
       });
       received++;
+      if (p.thumb)
+        await deps.upload(`${path}.thumb.jpg`, p.thumb, "image/jpeg").catch(() => undefined);
       if (r.status === "duplicate") duplicates++;
       remaining = r.remaining_uploads;
     } catch (e) {

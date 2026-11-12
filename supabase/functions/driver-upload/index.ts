@@ -3,15 +3,6 @@
 // Deploy: npx supabase functions deploy driver-upload --use-api --no-verify-jwt
 import { driverDeps } from "../_shared/driver-deps.ts";
 import { handleUpload } from "../_shared/driver-handlers.ts";
+import { serveHardened } from "../_shared/server.ts";
 
-Deno.serve(async (req) => {
-  try {
-    return await handleUpload(req, driverDeps());
-  } catch {
-    console.log(JSON.stringify({ level: "error", fn: "driver-upload", event: "unexpected" }));
-    return new Response(JSON.stringify({ error: "Something went wrong. Please try again." }), {
-      status: 500,
-      headers: { "content-type": "application/json", "Cache-Control": "no-store" },
-    });
-  }
-});
+serveHardened("driver-upload", (req) => handleUpload(req, driverDeps()));

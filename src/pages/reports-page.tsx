@@ -13,11 +13,16 @@ import {
 } from "recharts";
 import { ArrowRight, BarChart3, Landmark, ShoppingCart, Truck } from "lucide-react";
 import {
+  FINANCIAL_REPORTS,
   REPORTS,
+  REPORT_FILTERS,
+  exportReport,
   type ColumnFormat,
+  type ReportFilters,
   type ReportId,
   type ReportMeta,
 } from "@/services/reports.service";
+import { EntityPicker } from "@/components/entity-picker";
 import {
   ChartBox,
   ChartLegend,
@@ -26,12 +31,19 @@ import {
   gridProps,
   series,
 } from "@/components/charts";
-import { ErrorState, ExportButtons, PageSkeleton, SectionCard } from "@/components/common";
+import {
+  ErrorState,
+  ExportButtons,
+  PageSkeleton,
+  SectionCard,
+  saveBlob,
+} from "@/components/common";
 import { DataTable, type Column } from "@/components/data-table";
 import { DateRangePicker, type DateRangeValue } from "@/components/filter-bar";
 import { PageHeader } from "@/components/page-header";
-import { useReport } from "@/hooks/queries";
-import { formatDate, formatINR, formatINRCompact, formatNumber } from "@/lib/format";
+import { useMasterOptions, useReport } from "@/hooks/queries";
+import { useAuth } from "@/lib/auth";
+import { formatDate, formatINR, formatINRCompact, formatNumber, todayIST } from "@/lib/format";
 
 const ICONS: Record<ReportMeta["category"], typeof Truck> = {
   Operations: Truck,
@@ -41,10 +53,14 @@ const ICONS: Record<ReportMeta["category"], typeof Truck> = {
 };
 
 export function ReportsCatalogPage() {
-  const groups = (["Operations", "Sales", "Purchases", "Finance"] as const).map((c) => ({
-    category: c,
-    reports: REPORTS.filter((r) => r.category === c),
-  }));
+  const { can } = useAuth();
+  const finance = can("view_financial_reports");
+  const groups = (["Operations", "Sales", "Purchases", "Finance"] as const)
+    .map((c) => ({
+      category: c,
+      reports: REPORTS.filter((r) => r.category === c && (finance || !FINANCIAL_REPORTS.has(r.id))),
+    }))
+    .filter((g) => g.reports.length > 0);
   return (
     <>
       <PageHeader
@@ -98,8 +114,23 @@ function fmt(v: string | number | undefined, f: ColumnFormat) {
 }
 
 export function ReportPage({ reportId }: { reportId: ReportId }) {
-  const [range, setRange] = useState<DateRangeValue>({ from: "2026-06-01", to: "2026-11-10" });
-  const { data, isLoading, error } = useReport(reportId, range);
+  const [range, setRange] = useState<DateRangeValue>(() => {
+    const today = todayIST();
+    // Indian financial year: from 1 April.
+    const fyStart =
+      Number(today.slice(5, 7)) >= 4
+        ? `${today.slice(0, 4)}-04-01`
+        : `${Number(today.slice(0, 4)) - 1}-04-01`;
+    return { from: fyStart, to: today };
+  });
+  const [entity, setEntity] = useState<Omit<ReportFilters, "from" | "to">>({});
+  const filters: ReportFilters = { ...entity, from: range.from, to: range.to };
+  const { data, isLoading, error } = useReport(reportId, filters);
+  const { data: options } = useMasterOptions();
+  const exportAs = async (format: "xlsx" | "pdf") => {
+    const { blob, fileName } = await exportReport(reportId, filters, format);
+    saveBlob(blob, fileName);
+  };
   const columns = useMemo<Column<Record<string, string | number>>[]>(
     () =>
       (data?.columns ?? []).map((c, i) => ({
@@ -131,10 +162,44 @@ export function ReportPage({ reportId }: { reportId: ReportId }) {
         actions={
           <>
             <DateRangePicker value={range} onChange={setRange} />
-            <ExportButtons name={reportId} />
+            <ExportButtons
+              name={reportId}
+              onPdf={() => exportAs("pdf")}
+              onExcel={() => exportAs("xlsx")}
+            />
           </>
         }
       />
+      {(REPORT_FILTERS[reportId] ?? []).length > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Report filters">
+          {REPORT_FILTERS[reportId].map((kind) => {
+            const list =
+              kind === "customer"
+                ? options?.customers
+                : kind === "material"
+                  ? options?.materials
+                  : kind === "provider"
+                    ? options?.providers
+                    : kind === "transporter"
+                      ? options?.transporters
+                      : options?.vehicles.map((v) => ({ id: v.id, name: v.plate }));
+            const key = `${kind}Id` as keyof typeof entity;
+            return (
+              <EntityPicker
+                key={kind}
+                aria-label={`Filter by ${kind}`}
+                value={entity[key] ?? ""}
+                onChange={(v) => setEntity((e) => ({ ...e, [key]: v || undefined }))}
+                options={[
+                  { value: "", label: `All ${kind}s` },
+                  ...(list ?? []).map((x) => ({ value: x.id, label: x.name })),
+                ]}
+                placeholder={`All ${kind}s`}
+              />
+            );
+          })}
+        </div>
+      )}
       {isLoading || !data ? (
         <PageSkeleton rows={6} />
       ) : (

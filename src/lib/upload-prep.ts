@@ -24,6 +24,25 @@ export interface PreparedUpload {
   sha256: string;
   width?: number;
   height?: number;
+  /** Small JPEG preview (~320 px) stored next to the original as <path>.thumb.jpg. */
+  thumb?: Blob;
+}
+
+export const THUMB_EDGE = 320;
+
+/** Small JPEG preview for lists; null when the browser cannot draw the image. */
+export async function makeThumb(blob: Blob): Promise<Blob | null> {
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return null;
+  const bitmap = await createImageBitmap(blob);
+  const size = fitWithin(bitmap.width, bitmap.height, THUMB_EDGE);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(bitmap, 0, 0, size.width, size.height);
+  bitmap.close();
+  return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
 }
 
 const isHeic = (f: File) => /image\/hei[cf]/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
@@ -92,11 +111,13 @@ export async function prepareUpload(file: File): Promise<PreparedUpload> {
   }
   if (blob.size > MAX_BYTES) throw new Error(`${file.name} is larger than 20 MB.`);
   const ext = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+  const thumb = await makeThumb(blob).catch(() => null);
   return {
     blob,
     mimeType,
     ext,
     sha256: await sha256Hex(blob),
     ...(scaled ? { width: scaled.width, height: scaled.height } : {}),
+    ...(thumb ? { thumb } : {}),
   };
 }

@@ -405,7 +405,7 @@ function TripDetail({ data }: { data: NonNullable<ReturnType<typeof useTrip>["da
                   className="block rounded-xl border p-3 hover:shadow-md"
                 >
                   <div className="flex items-center justify-between">
-                    <DocumentThumbnail type={d.type} />
+                    <DocumentThumbnail type={d.type} storagePath={d.storagePath} />
                     <StatusBadge status={d.status} />
                   </div>
                   <p className="mt-2 text-sm font-medium">{d.type}</p>

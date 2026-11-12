@@ -981,6 +981,36 @@ function financeTables(): Tables {
         d90: 0,
       },
     ],
+    v_failed_jobs: [
+      {
+        job_id: "j1",
+        business_id: ID.business,
+        document_id: ID.docReview,
+        status: "failed",
+        attempts: 3,
+        max_attempts: 3,
+        last_error: "Gemini 503: high demand",
+        next_run_at: "2026-11-10T05:00:00+00:00",
+        updated_at: "2026-11-10T05:00:00+00:00",
+        file_name: "slip.jpg",
+        source: "driver_link",
+        document_status: "failed",
+        received_at: "2026-11-10T04:00:00+00:00",
+      },
+    ],
+    error_logs: [
+      {
+        id: "el1",
+        created_at: "2026-11-10T05:00:00+00:00",
+        business_id: ID.business,
+        source: "process-document",
+        request_id: "req-123456789",
+        level: "error",
+        message: "document_failed: Gemini 503",
+        context: {},
+        user_id: null,
+      },
+    ],
     v_monthly_profit: [
       {
         business_id: ID.business,
@@ -1043,3 +1073,110 @@ export const FINANCE_TOTALS = {
   bills_needing_attention: 1,
   invoices_flagged: 0,
 };
+
+/** dashboard_summary() for the fixture rows (shape as returned by the database). */
+export const DASHBOARD_SUMMARY = {
+  month: "2026-11",
+  kpis: {
+    activeOrders: 1,
+    purchasedMT: 30,
+    dispatchedMT: 28.12,
+    deliveredMT: 27.55,
+    activeTrips: 0,
+    tripsToVerify: 0,
+    documentsReceived: 2,
+    documentsStaff: 1,
+    documentsDriver: 1,
+    autoProcessedPct: 50,
+    needsAttention: 2,
+    pendingProviderBills: 0,
+    pendingTransporterBills: 1,
+    customerOutstanding: 33805.15,
+    providerPayable: 41617.6,
+    transporterPayable: 6200,
+    estimatedProfit: 2925.4,
+    overdueInvoices: 0,
+  },
+  automation: {
+    received: 2,
+    success: 1,
+    autoUpdated: 1,
+    awaitingReview: 1,
+    failed: 0,
+    duplicates: 0,
+    today: 0,
+    week: 2,
+    bySource: { staff: 1, driver: 1 },
+    breakdown: [
+      { status: "automatically_recorded", count: 1 },
+      { status: "needs_review", count: 1 },
+    ],
+    daily: [{ date: "2026-11-09", automatic: 1, review: 1, failed: 0 }],
+  },
+  monthly: [
+    {
+      business_id: ID.business,
+      month: "2026-11",
+      sales_value: 51243,
+      purchase_cost: 41617.6,
+      transport_cost: 5800,
+      loading_unloading_cost: 900,
+      labour_cost: 0,
+      other_expenses: 0,
+      estimated_profit: 2925.4,
+      profit_status: "estimated",
+    },
+  ],
+  materialProfit: [{ name: "River Sand", profit: 3825.4 }],
+  vehicleDifference: [
+    { plate: "MH12AB4821", vehicleId: ID.vehicle, avgDifference: 0.57, flagged: 0 },
+  ],
+  topCustomers: [{ name: "Shivneri Buildcon", customerId: ID.customer, sales: 51243 }],
+  transporterCost: [
+    { name: "Om Sai Roadlines", transporterId: ID.transporter, perMT: 206.26, trips: 1 },
+  ],
+  attention: [
+    {
+      id: ID.docReview,
+      kind: "review",
+      title: "slip.jpg needs review",
+      detail: "no match",
+      status: "Needs Review",
+      href: `/review/${ID.docReview}`,
+      action: "Resolve",
+    },
+  ],
+  insights: {
+    bestMaterial: { name: "River Sand", profit: 3825.4 },
+    topCustomer: { name: "Shivneri Buildcon", id: ID.customer, sales: 51243 },
+    costliestTransporter: { name: "Om Sai Roadlines", id: ID.transporter, perMT: 206.26, trips: 1 },
+    cheapestProvider: {
+      name: "Bhima River Sands",
+      id: ID.provider,
+      material: "River Sand",
+      landed: 1686.26,
+    },
+    monthSuppliedMT: 27.55,
+    recurringShortages: [],
+  },
+};
+
+/** report_run(): one small report in the database's shape, titled after the requested id. */
+export function reportRun(args: Record<string, unknown>) {
+  return {
+    id: args["p_report"],
+    title: String(args["p_report"]),
+    columns: [
+      { key: "name", label: "Name", format: "text" },
+      { key: "value", label: "Value", format: "inr" },
+    ],
+    rows: [{ name: "Shivneri Buildcon", value: 51243 }],
+    chart: {
+      type: "bar",
+      xKey: "name",
+      series: [{ key: "value", label: "Value" }],
+      valueFormat: "inr",
+    },
+    summary: [{ label: "Total", value: 51243, format: "inr" }],
+  };
+}

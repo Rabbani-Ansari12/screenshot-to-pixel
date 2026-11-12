@@ -87,11 +87,12 @@ async function main() {
       query:
         upsert("document_worker_secret", secret) +
         upsert("process_document_url", url) +
-        upsert("notify_digest_url", `https://${ref}.supabase.co/functions/v1/notify-digest`),
+        upsert("notify_digest_url", `https://${ref}.supabase.co/functions/v1/notify-digest`) +
+        upsert("export_backup_url", `https://${ref}.supabase.co/functions/v1/export-backup`),
     }),
   });
   console.log(
-    "✓ Vault secrets document_worker_secret, process_document_url and notify_digest_url set",
+    "✓ Vault secrets document_worker_secret, process_document_url, notify_digest_url and export_backup_url set",
   );
 
   const check = JSON.parse(
@@ -99,7 +100,7 @@ async function main() {
       method: "POST",
       body: JSON.stringify({
         query:
-          "select (select count(*) from vault.decrypted_secrets where name in ('document_worker_secret','process_document_url','notify_digest_url')) as vault_entries, " +
+          "select (select count(*) from vault.decrypted_secrets where name in ('document_worker_secret','process_document_url','notify_digest_url','export_backup_url')) as vault_entries, " +
           "(select count(*) from cron.job where jobname in ('process-documents','notify-digest')) as cron_jobs",
       }),
     }),

@@ -1438,6 +1438,50 @@ export type Database = {
           },
         ]
       }
+      error_logs: {
+        Row: {
+          business_id: string | null
+          context: Json
+          created_at: string
+          id: string
+          level: string
+          message: string
+          request_id: string | null
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          business_id?: string | null
+          context?: Json
+          created_at?: string
+          id?: string
+          level?: string
+          message: string
+          request_id?: string | null
+          source: string
+          user_id?: string | null
+        }
+        Update: {
+          business_id?: string | null
+          context?: Json
+          created_at?: string
+          id?: string
+          level?: string
+          message?: string
+          request_id?: string | null
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "error_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
@@ -4207,6 +4251,39 @@ export type Database = {
           },
         ]
       }
+      v_failed_jobs: {
+        Row: {
+          attempts: number | null
+          business_id: string | null
+          document_id: string | null
+          document_status: Database["public"]["Enums"]["document_status"] | null
+          file_name: string | null
+          job_id: string | null
+          last_error: string | null
+          max_attempts: number | null
+          next_run_at: string | null
+          received_at: string | null
+          source: Database["public"]["Enums"]["document_intake_source"] | null
+          status: Database["public"]["Enums"]["document_job_status"] | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_jobs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_jobs_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: true
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_invoice_list: {
         Row: {
           additional_charges: number | null
@@ -5294,14 +5371,14 @@ export type Database = {
           },
           {
             foreignKeyName: "weight_records_document_id_fkey"
-            columns: ["delivery_document_id"]
+            columns: ["loading_document_id"]
             isOneToOne: false
             referencedRelation: "documents"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "weight_records_document_id_fkey"
-            columns: ["loading_document_id"]
+            columns: ["delivery_document_id"]
             isOneToOne: false
             referencedRelation: "documents"
             referencedColumns: ["id"]
@@ -5699,6 +5776,7 @@ export type Database = {
         Returns: string
       }
       current_business_id: { Args: never; Returns: string }
+      dashboard_summary: { Args: { p_month?: string }; Returns: Json }
       decide_reconciliation: {
         Args: {
           p_action: string
@@ -5806,8 +5884,13 @@ export type Database = {
       is_active_user: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
       issue_invoice: { Args: { p_invoice_id: string }; Returns: undefined }
+      kick_backup_export: { Args: never; Returns: undefined }
       kick_document_worker: { Args: never; Returns: undefined }
       kick_notify_digest: { Args: never; Returns: undefined }
+      log_client_error: {
+        Args: { p_context?: Json; p_message: string }
+        Returns: undefined
+      }
       mark_document_duplicate: {
         Args: { p_document_id: string; p_original_id: string; p_reason: string }
         Returns: undefined
@@ -5890,6 +5973,15 @@ export type Database = {
         Args: { p_document_id: string; p_reason: string }
         Returns: undefined
       }
+      report_run: {
+        Args: {
+          p_filters?: Json
+          p_from?: string
+          p_report: string
+          p_to?: string
+        }
+        Returns: Json
+      }
       reprocess_document: {
         Args: { p_document_id: string }
         Returns: undefined
@@ -5902,6 +5994,8 @@ export type Database = {
         Args: { p_key: Database["public"]["Enums"]["permission_key"] }
         Returns: undefined
       }
+      retry_document_job: { Args: { p_job_id: string }; Returns: undefined }
+      retry_failed_jobs: { Args: never; Returns: number }
       review_attach_document: {
         Args: {
           p_document_id: string
@@ -5925,6 +6019,7 @@ export type Database = {
         Returns: Json
       }
       revoke_upload_token: { Args: { p_id: string }; Returns: undefined }
+      run_housekeeping: { Args: never; Returns: Json }
       save_weight_record: {
         Args: {
           p_reason?: string

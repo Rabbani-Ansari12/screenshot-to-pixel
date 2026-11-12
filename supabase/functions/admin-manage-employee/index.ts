@@ -13,6 +13,18 @@
 // Deploy: npx supabase functions deploy admin-manage-employee --use-api
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { getSecret, secretProblem } from "../_shared/env.ts";
+import {
+  HttpError,
+  context,
+  errorResponse,
+  json as respond,
+  logger,
+  parseJson,
+  uuid,
+  type Ctx as ReqCtx,
+} from "../_shared/http.ts";
+import { appOrigin as allowedOrigin, errorSink, rateLimit } from "../_shared/server.ts";
+import { z } from "../_shared/zod.ts";
 
 const PERMISSIONS = [
   "view_records",
@@ -26,25 +38,6 @@ const PERMISSIONS = [
 ] as const;
 type Permission = (typeof PERMISSIONS)[number];
 
-const cors = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "authorization, x-client-info, apikey, content-type",
-  "access-control-allow-methods": "POST, OPTIONS",
-};
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "content-type": "application/json" },
-  });
-
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
 const fail = (status: number, message: string): never => {
   throw new HttpError(status, message);
 };
@@ -333,12 +326,40 @@ async function resetPassword(ctx: Ctx, body: Record<string, unknown>) {
   return { id: target.id, method: "email" };
 }
 
+const permissionList = z.array(z.enum(PERMISSIONS)).max(PERMISSIONS.length);
+const Body = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("list") }),
+  z.object({
+    action: z.literal("create"),
+    name: z.string().trim().min(2).max(120),
+    email: z.string().trim().email().max(254),
+    phone: z.string().trim().max(20).optional().nullable(),
+    designation: z.string().trim().max(80).optional().nullable(),
+    permissions: permissionList,
+    method: z.enum(["invite", "temp_password", "magic_link"]),
+    password: z.string().min(10).max(128).optional().nullable(),
+  }),
+  z.object({ action: z.literal("set_permissions"), profileId: uuid, permissions: permissionList }),
+  z.object({ action: z.literal("set_active"), profileId: uuid, active: z.boolean() }),
+  z.object({
+    action: z.literal("reset_password"),
+    profileId: uuid,
+    method: z.enum(["email", "temp_password"]),
+    password: z.string().min(10).max(128).optional().nullable(),
+  }),
+]);
+
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  const rc: ReqCtx = context(req, allowedOrigin());
+  const log = logger("admin-manage-employee", rc.requestId, errorSink);
+  const json = (body: unknown, status = 200) => respond(rc, body, status);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: rc.headers });
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
   try {
     const ctx = await authenticate(req);
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!(await rateLimit(`admin:${ctx.callerId}`, 300)))
+      throw new HttpError(429, "Too many requests. Please wait a few minutes.");
+    const body = (await parseJson(req, Body)) as Record<string, unknown> & z.infer<typeof Body>;
     switch (body.action) {
       case "list":
         return json({ employees: await list(ctx) });
@@ -355,15 +376,8 @@ Deno.serve(async (req) => {
         return json(await setActive(ctx, body.profileId, body.active));
       case "reset_password":
         return json(await resetPassword(ctx, body));
-      default:
-        return json({ error: "Unknown action." }, 400);
     }
   } catch (e) {
-    if (e instanceof HttpError) return json({ error: e.message }, e.status);
-    console.error(
-      "admin-manage-employee failed:",
-      e instanceof Error ? e.message : "unknown error",
-    );
-    return json({ error: "Something went wrong. Please try again." }, 500);
+    return errorResponse(rc, e, log);
   }
 });

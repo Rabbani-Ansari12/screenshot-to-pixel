@@ -1,0 +1,79 @@
+# Checks every push and pull request. Nothing here touches the staging or production projects:
+# SQL tests and the browser smoke test run against a throw-away local Supabase stack.
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Typecheck, lint, unit tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          # Build-time public values only; the real ones are injected by the deploy workflow.
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+      - name: No secrets in the browser bundle
+        run: |
+          if grep -rEl "service_role|sb_secret_|SUPABASE_SERVICE_ROLE_KEY=|AIza[0-9A-Za-z_-]{30}|sbp_[0-9a-f]{20}" .output/public; then
+            echo "::error::A secret-looking value is in the client bundle"; exit 1; fi
+
+  functions:
+    name: Edge Functions (Deno typecheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.1.x
+      - run: deno check --no-lock --node-modules-dir=none supabase/functions/*/index.ts
+
+  database:
+    name: Migrations, SQL tests, browser smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Start a local Supabase stack (applies every migration)
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector
+      - name: pgTAP
+        run: supabase test db
+      - name: Playwright smoke (public pages and sign-in gate)
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          eval "$(supabase status -o env | sed 's/^/export /')"
+          export VITE_SUPABASE_URL="$API_URL" VITE_SUPABASE_ANON_KEY="$ANON_KEY"
+          npx playwright test e2e/smoke.spec.ts e2e/driver-link.spec.ts
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7

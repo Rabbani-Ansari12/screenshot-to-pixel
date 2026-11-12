@@ -21,6 +21,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShortagesRouteImport } from './routes/shortages'
 import { Route as StockRouteImport } from './routes/stock'
+import { Route as SystemRouteImport } from './routes/system'
 import { Route as UploadsRouteImport } from './routes/uploads'
 import { Route as BillsBillIdRouteImport } from './routes/bills/$billId'
 import { Route as BillsProviderRouteImport } from './routes/bills/provider'
@@ -115,6 +116,11 @@ const ShortagesRoute = ShortagesRouteImport.update({
 const StockRoute = StockRouteImport.update({
   id: '/stock',
   path: '/stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemRoute = SystemRouteImport.update({
+  id: '/system',
+  path: '/system',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UploadsRoute = UploadsRouteImport.update({
@@ -307,6 +313,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
+  '/system': typeof SystemRoute
   '/uploads': typeof UploadsRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
+  '/system': typeof SystemRoute
   '/uploads': typeof UploadsRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/shortages': typeof ShortagesRoute
   '/stock': typeof StockRoute
+  '/system': typeof SystemRoute
   '/uploads': typeof UploadsRoute
   '/bills/$billId': typeof BillsBillIdRoute
   '/bills/provider': typeof BillsProviderRoute
@@ -457,6 +466,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
+    | '/system'
     | '/uploads'
     | '/bills/$billId'
     | '/bills/provider'
@@ -506,6 +516,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
+    | '/system'
     | '/uploads'
     | '/bills/$billId'
     | '/bills/provider'
@@ -555,6 +566,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shortages'
     | '/stock'
+    | '/system'
     | '/uploads'
     | '/bills/$billId'
     | '/bills/provider'
@@ -605,6 +617,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ShortagesRoute: typeof ShortagesRoute
   StockRoute: typeof StockRoute
+  SystemRoute: typeof SystemRoute
   UploadsRoute: typeof UploadsRoute
   BillsBillIdRoute: typeof BillsBillIdRoute
   BillsProviderRoute: typeof BillsProviderRoute
@@ -726,6 +739,13 @@ declare module '@tanstack/react-router' {
       path: '/stock'
       fullPath: '/stock'
       preLoaderRoute: typeof StockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/system': {
+      id: '/system'
+      path: '/system'
+      fullPath: '/system'
+      preLoaderRoute: typeof SystemRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/uploads': {
@@ -989,6 +1009,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ShortagesRoute: ShortagesRoute,
   StockRoute: StockRoute,
+  SystemRoute: SystemRoute,
   UploadsRoute: UploadsRoute,
   BillsBillIdRoute: BillsBillIdRoute,
   BillsProviderRoute: BillsProviderRoute,

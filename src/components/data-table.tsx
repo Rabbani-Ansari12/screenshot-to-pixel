@@ -21,7 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Option } from "@/types";
 import type { TableQuery } from "@/services/supabase/table-query";
-import { EmptyState, ExportButtons, TableSkeleton } from "./common";
+import { EmptyState, ExportButtons, TableSkeleton, saveBlob } from "./common";
 import { FilterBar, type DateRangeValue } from "./filter-bar";
 
 export interface Column<T> {
@@ -36,6 +36,8 @@ export interface Column<T> {
   hideBelow?: "lg" | "xl";
   /** Role in the mobile card layout. Default "meta". */
   mobile?: "title" | "subtitle" | "badge" | "meta" | "hidden";
+  /** Text written to CSV exports (defaults to the sort value, then plain cell text). */
+  exportValue?: (row: T) => string | number | null;
 }
 
 export interface ColumnFilter<T> {
@@ -252,7 +254,12 @@ export function DataTable<T>({
             </div>
           )}
           {toolbar}
-          {exportName && <ExportButtons name={exportName} />}
+          {exportName && (
+            <ExportButtons
+              name={exportName}
+              onCsv={() => exportCsv(exportName, columns, server ? rows : filtered)}
+            />
+          )}
         </div>
       </div>
 
@@ -519,4 +526,29 @@ export function optionsFrom(values: (string | null | undefined)[]): Option[] {
   return [...new Set(values.filter((v): v is string => Boolean(v)))]
     .sort()
     .map((v) => ({ value: v, label: v }));
+}
+
+/** Plain-text value of a cell for CSV: the sort value, else the rendered text. */
+function cellText<T>(col: Column<T>, row: T): string {
+  if (col.exportValue) return String(col.exportValue(row) ?? "");
+  const v = col.sortValue?.(row);
+  if (v !== undefined && v !== null) return String(v);
+  const node = col.cell(row);
+  return typeof node === "string" || typeof node === "number" ? String(node) : "";
+}
+
+const csvEscape = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/** CSV of the rows shown (all filtered rows; the current page in server mode). */
+export function exportCsv<T>(name: string, columns: Column<T>[], rows: T[]) {
+  const cols = columns.filter((c) => c.header);
+  const lines = [
+    cols.map((c) => csvEscape(c.header)).join(","),
+    ...rows.map((r) => cols.map((c) => csvEscape(cellText(c, r))).join(",")),
+  ];
+  // BOM so Excel opens UTF-8 (₹, names) correctly.
+  saveBlob(
+    new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }),
+    `${name}.csv`,
+  );
 }

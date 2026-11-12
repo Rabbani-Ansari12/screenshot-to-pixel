@@ -1,5 +1,5 @@
 /** Small shared building blocks: cards, KPI tiles, empty / error / loading states, export buttons. */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   FileText,
   Inbox,
+  Loader2,
   Lock,
   type LucideIcon,
 } from "lucide-react";
@@ -239,33 +240,65 @@ export function DetailSkeleton() {
   );
 }
 
-/** UI-only export buttons (no file is generated in the demo). */
-export function ExportButtons({ name, compact }: { name: string; compact?: boolean }) {
-  // TODO(backend): call an export edge function that renders PDF / XLSX for the current filters.
-  const run = (kind: "PDF" | "Excel") =>
-    toast.success(`${kind} export queued`, {
-      description: `${name}.${kind === "PDF" ? "pdf" : "xlsx"} will be ready shortly (demo).`,
-    });
+/** Saves a Blob as a file in the browser. */
+export function saveBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Export buttons. Each handler produces the file (CSV in the browser for tables; Excel / PDF on
+ * the server for reports). Only the formats with a handler are shown.
+ */
+export function ExportButtons({
+  name,
+  compact,
+  onCsv,
+  onPdf,
+  onExcel,
+}: {
+  name: string;
+  compact?: boolean;
+  onCsv?: () => void | Promise<void>;
+  onPdf?: () => void | Promise<void>;
+  onExcel?: () => void | Promise<void>;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const run = async (kind: string, fn: () => void | Promise<void>) => {
+    setBusy(kind);
+    try {
+      await fn();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Export failed");
+    } finally {
+      setBusy(null);
+    }
+  };
+  const button = (kind: string, label: string, icon: ReactNode, fn?: () => void | Promise<void>) =>
+    fn && (
+      <Button
+        key={kind}
+        variant="outline"
+        size="sm"
+        onClick={() => void run(kind, fn)}
+        disabled={busy !== null}
+        aria-label={`Export ${name} as ${label}`}
+      >
+        {busy === kind ? <Loader2 className="size-4 animate-spin" /> : icon}
+        {!compact && `Export ${label}`}
+      </Button>
+    );
   return (
     <div className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => run("PDF")}
-        aria-label={`Export ${name} as PDF`}
-      >
-        <FileText className="size-4" />
-        {!compact && "Export PDF"}
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => run("Excel")}
-        aria-label={`Export ${name} as Excel`}
-      >
-        <FileSpreadsheet className="size-4" />
-        {!compact && "Export Excel"}
-      </Button>
+      {button("csv", "CSV", <FileSpreadsheet className="size-4" />, onCsv)}
+      {button("pdf", "PDF", <FileText className="size-4" />, onPdf)}
+      {button("xlsx", "Excel", <FileSpreadsheet className="size-4" />, onExcel)}
     </div>
   );
 }

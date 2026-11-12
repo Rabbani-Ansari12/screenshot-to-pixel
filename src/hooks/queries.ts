@@ -195,6 +195,23 @@ export const useRecentUploads = () =>
   useQuery(q(["documents", "recent"], () => links.listRecentUploads()));
 export const useEmployees = () => useQuery(q(["employees"], admin.listEmployees));
 export const useAuditEvents = () => useQuery(q(["audit"], admin.listAuditEvents));
+export const useAuditPage = (query: TableQuery | null) =>
+  useQuery({
+    ...q(["audit", "page", query], () => admin.listAuditPage(query as TableQuery), Boolean(query)),
+    placeholderData: keepPreviousData,
+  });
+export const useAuditUsers = () => useQuery(q(["audit", "users"], admin.auditUsers));
+/** Signed preview link for a document (null when it has none); refreshed before it expires. */
+export const useThumbUrl = (storagePath: string | undefined) =>
+  useQuery({
+    queryKey: ["documents", "thumb", storagePath],
+    queryFn: () => documents.thumbUrl(storagePath ?? ""),
+    enabled: Boolean(storagePath),
+    staleTime: 240_000,
+    retry: false,
+  });
+export const useFailedJobs = () => useQuery(q(["system", "jobs"], admin.listFailedJobs));
+export const useErrorLogs = () => useQuery(q(["system", "errors"], () => admin.listErrorLogs()));
 export const useSettings = () => useQuery(q(["settings"], admin.getSettings));
 export const useNotifications = () => useQuery(q(["notifications"], admin.listNotifications));
 export const useGlobalSearch = (query: string) =>
@@ -312,13 +329,19 @@ export function useLiveUpdates(enabled: boolean) {
     const channel = sb
       .channel("live-documents")
       .on("postgres_changes", { event: "*", schema: "public", table: "documents" }, () =>
-        refresh("documents", "review", "trips", "orders", "stock", "links"),
+        refresh("documents", "review", "trips", "orders", "stock", "links", "dashboard"),
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "document_jobs" }, () =>
         refresh("documents"),
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () =>
         refresh("notifications"),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "truck_trips" }, () =>
+        refresh("trips", "orders", "stock", "dashboard", "profit"),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "payments" }, () =>
+        refresh("payments", "invoices", "bills", "dashboard"),
       )
       .subscribe();
     return () => {

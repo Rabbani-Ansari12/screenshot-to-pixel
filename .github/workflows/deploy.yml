@@ -1,0 +1,68 @@
+# Deploys database migrations, Edge Functions and the web app.
+#   branch "staging" → GitHub environment "staging"  (staging Supabase project + Vercel preview)
+#   branch "main"    → GitHub environment "production" (production project + Vercel production)
+# Each GitHub environment holds its own secrets (Settings → Environments):
+#   SUPABASE_ACCESS_TOKEN   personal access token of the OWNER's Supabase account (not a developer's)
+#   SUPABASE_PROJECT_REF    project ref of that environment
+#   SUPABASE_DB_PASSWORD    database password of that project
+#   VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY   public values for the browser
+#   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+# Add "required reviewers" to the production environment so nothing reaches production unapproved.
+name: Deploy
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Off until the owner has created the environments and set the repository variable
+    # DEPLOY_ENABLED=true (Settings → Secrets and variables → Actions → Variables).
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Database migrations (new files only, in order)
+        run: |
+          supabase link --project-ref "$PROJECT_REF"
+          supabase db push --include-all
+
+      - name: Edge Functions
+        run: |
+          for fn in supabase/functions/*/; do
+            name=$(basename "$fn")
+            [ "$name" = "_shared" ] && continue
+            supabase functions deploy "$name" --project-ref "$PROJECT_REF"   # verify_jwt from config.toml
+          done
+
+      - name: Web app (Vercel)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          NITRO_PRESET: vercel
+        run: |
+          npm ci
+          npm run build
+          npx vercel@latest deploy --prebuilt --token "$VERCEL_TOKEN" ${{ github.ref_name == 'main' && '--prod' || '' }}

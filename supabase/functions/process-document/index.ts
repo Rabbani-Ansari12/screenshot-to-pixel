@@ -8,17 +8,19 @@ import { MissingSecretError, getSecret } from "../_shared/env.ts";
 import { createGeminiClient, type GenAiLike } from "../_shared/gemini.ts";
 import { DEFAULT_WEIGHTS, type CandidateTrip, type Criterion } from "../_shared/matcher.ts";
 import { normalizeVehicleNumber } from "../_shared/normalize.ts";
+import { logger, requestIdOf, SECURITY_HEADERS } from "../_shared/http.ts";
+import { errorSink } from "../_shared/server.ts";
 import { CapReachedError, processDocument, type Deps } from "./pipeline.ts";
 
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...SECURITY_HEADERS, "content-type": "application/json" },
+  });
 
-function log(level: "info" | "warn" | "error", event: string, data: Record<string, unknown> = {}) {
-  // Structured logs (visible in the Supabase dashboard). Never log secrets or file contents.
-  console.log(
-    JSON.stringify({ level, event, fn: "process-document", at: new Date().toISOString(), ...data }),
-  );
-}
+// Structured logs (visible in the Supabase dashboard); warnings and errors also go to
+// public.error_logs with the request id. Never log secrets or file contents.
+let log = logger("process-document", "startup", null);
 
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -34,6 +36,7 @@ const nextIstMidnight = () => {
 };
 
 Deno.serve(async (req) => {
+  log = logger("process-document", requestIdOf(req), errorSink);
   if (req.method !== "POST") return json({ error: "Use POST." }, 405);
   let expected: string;
   try {

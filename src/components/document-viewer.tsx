@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useThumbUrl } from "@/hooks/queries";
 
 const TYPE_STYLE: Record<DocumentType, { icon: LucideIcon; tint: string }> = {
   "Weighbridge Slip": { icon: Scale, tint: "bg-sky-500/10 text-sky-700 dark:text-sky-300" },
@@ -39,8 +40,33 @@ const TYPE_STYLE: Record<DocumentType, { icon: LucideIcon; tint: string }> = {
   Other: { icon: FileText, tint: "bg-muted text-muted-foreground" },
 };
 
-export function DocumentThumbnail({ type, className }: { type: DocumentType; className?: string }) {
+/**
+ * Small preview of a document: the stored thumbnail when there is one (photos uploaded through the
+ * app or a driver link), otherwise an icon for its type.
+ */
+export function DocumentThumbnail({
+  type,
+  className,
+  storagePath,
+}: {
+  type: DocumentType;
+  className?: string;
+  storagePath?: string | undefined;
+}) {
   const { icon: Icon, tint } = TYPE_STYLE[type];
+  const { data: src } = useThumbUrl(storagePath);
+  if (src)
+    return (
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        className={cn(
+          "size-10 shrink-0 rounded-lg border border-border/60 object-cover",
+          className,
+        )}
+      />
+    );
   return (
     <span
       className={cn(

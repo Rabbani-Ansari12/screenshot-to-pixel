@@ -12,10 +12,18 @@ import type {
   Permission,
 } from "@/types";
 import type { Json, Tables } from "@/lib/supabase";
-import { AppError, check, rows, toAppError, unwrapMaybe } from "./supabase/errors";
+import { AppError, check, rows, toAppError, unwrap, unwrapMaybe } from "./supabase/errors";
 import { sb } from "./supabase/fetch";
 import { todayIST } from "@/lib/format";
 import { unitFromDb, unitToDb } from "./supabase/mappers";
+import {
+  activeFilter,
+  endOfDayIST,
+  ilikeTerm,
+  startOfDayIST,
+  type Page,
+  type TableQuery,
+} from "./supabase/table-query";
 
 // ---------- Employees ----------
 type SignInMethod = "invite" | "temp_password" | "magic_link";
@@ -200,7 +208,58 @@ export function toAuditEvent(r: AuditRow, names: Map<string, string>): AuditEven
         : changes,
     note: r.reason ?? "",
     ...(r.reason ? { reason: r.reason } : {}),
+    table: r.table_name,
+    operation: r.action as "INSERT" | "UPDATE" | "DELETE",
+    before,
+    after,
   };
+}
+
+/** Entity filter options for the audit page: table name → label. */
+export const AUDIT_ENTITIES = TABLE_LABEL;
+
+const AUDIT_SORT: Record<string, string> = {
+  at: "changed_at",
+  entity: "table_name",
+  action: "action",
+};
+
+/**
+ * Server-side page of the audit log (owner only through RLS). Filters: user (profile id),
+ * entity (table), action (INSERT / UPDATE / DELETE), date range, search in the reason / record id.
+ */
+export async function listAuditPage(q: TableQuery): Promise<Page<AuditEvent>> {
+  let query = sb().from("audit_logs").select("*", { count: "exact" });
+  const user = activeFilter(q, "user");
+  if (user) query = user === "system" ? query.is("changed_by", null) : query.eq("changed_by", user);
+  const entity = activeFilter(q, "entity");
+  if (entity) query = query.eq("table_name", entity);
+  const action = activeFilter(q, "action");
+  if (action) query = query.eq("action", action as "INSERT");
+  if (q.from) query = query.gte("changed_at", startOfDayIST(q.from));
+  if (q.to) query = query.lte("changed_at", endOfDayIST(q.to));
+  const term = q.search.trim();
+  if (term) {
+    query = /^[0-9a-f-]{36}$/i.test(term)
+      ? query.eq("record_id", term)
+      : query.ilike("reason", ilikeTerm(term).replace(/\*/g, "%"));
+  }
+  const col = (q.sort && AUDIT_SORT[q.sort.id]) ?? "changed_at";
+  const [res, names] = await Promise.all([
+    query
+      .order(col as "changed_at", { ascending: q.sort ? !q.sort.desc : false })
+      .range(q.page * q.pageSize, q.page * q.pageSize + q.pageSize - 1),
+    profileNames(),
+  ]);
+  return { rows: rows(res).map((r) => toAuditEvent(r, names)), total: res.count ?? 0 };
+}
+
+/** People who appear in the audit log (for the user filter). */
+export async function auditUsers(): Promise<{ id: string; name: string }[]> {
+  const names = await profileNames();
+  return [...names.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function profileNames(): Promise<Map<string, string>> {
@@ -430,4 +489,75 @@ export async function listNotifications(): Promise<AppNotification[]> {
 
 export async function markNotificationsRead(ids: string[]): Promise<void> {
   if (ids.length) check(await sb().rpc("mark_notifications_read", { p_ids: ids }));
+}
+
+// ---------- System health (owner): failed document jobs and error log ----------
+export interface FailedJob {
+  jobId: string;
+  documentId: string;
+  fileName: string;
+  source: "Staff upload" | "Driver link";
+  status: string;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string;
+  updatedAt: string;
+}
+
+export async function listFailedJobs(): Promise<FailedJob[]> {
+  const list = rows(
+    await sb()
+      .from("v_failed_jobs")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .limit(200),
+  );
+  return list.map((j) => ({
+    jobId: j.job_id ?? "",
+    documentId: j.document_id ?? "",
+    fileName: j.file_name ?? "Document",
+    source: j.source === "driver_link" ? "Driver link" : "Staff upload",
+    status: j.status === "failed" ? "Failed" : "Retrying",
+    attempts: j.attempts ?? 0,
+    maxAttempts: j.max_attempts ?? 3,
+    lastError: j.last_error ?? "",
+    updatedAt: j.updated_at ?? "",
+  }));
+}
+
+export async function retryJob(jobId: string): Promise<void> {
+  check(await sb().rpc("retry_document_job", { p_job_id: jobId }));
+}
+
+export async function retryAllFailedJobs(): Promise<number> {
+  return Number(unwrap(await sb().rpc("retry_failed_jobs")));
+}
+
+export interface ErrorLogEntry {
+  id: string;
+  at: string;
+  source: string;
+  level: "warn" | "error";
+  message: string;
+  requestId: string;
+  context: string;
+}
+
+export async function listErrorLogs(limit = 200): Promise<ErrorLogEntry[]> {
+  const list = rows(
+    await sb()
+      .from("error_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit),
+  );
+  return list.map((e) => ({
+    id: e.id,
+    at: e.created_at,
+    source: e.source,
+    level: e.level === "warn" ? "warn" : "error",
+    message: e.message,
+    requestId: e.request_id ?? "",
+    context: JSON.stringify(e.context ?? {}),
+  }));
 }

@@ -47,7 +47,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { UploadDialog } from "@/components/upload-dialog";
 import { useDashboard } from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
-import { formatDate, formatINRCompact, formatNumber } from "@/lib/format";
+import { formatDate, formatINRCompact, formatNumber, todayIST } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const attentionIcon = { review: Bot, bill: Scale, shortage: Truck, invoice: ReceiptIndianRupee };
@@ -61,6 +61,14 @@ export function DashboardPage() {
   const { kpis, automation } = data;
   const showMoney = can("view_financial_reports");
   const firstName = user?.name.split(" ")[0] ?? "";
+  const hour = Number(
+    new Intl.DateTimeFormat("en-IN", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "Asia/Kolkata",
+    }).format(new Date()),
+  );
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   const donut = [
     {
@@ -96,8 +104,8 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Good afternoon, ${firstName}`}
-        description={`Here's what needs you today. Everything else is being recorded automatically · ${formatDate("2026-11-10")}`}
+        title={`${greeting}, ${firstName}`}
+        description={`Here's what needs you today. Everything else is being recorded automatically · ${formatDate(todayIST())}`}
         actions={
           <>
             <Button variant="outline" onClick={() => setUpload(true)}>
@@ -165,8 +173,32 @@ export function DashboardPage() {
           emphasis={kpis.tripsToVerify > 0}
           href="/shortages"
         />
+        <KpiCard
+          label="Documents this month"
+          value={kpis.documentsReceived}
+          hint={`${kpis.documentsStaff} staff upload · ${kpis.documentsDriver} driver link · ${kpis.autoProcessedPct}% automatic`}
+          icon={FileUp}
+          href="/uploads"
+        />
+        <KpiCard
+          label="Needs attention"
+          value={kpis.needsAttention}
+          hint="Reviews, shortages and bill differences"
+          icon={AlertTriangle}
+          tone="red"
+          emphasis={kpis.needsAttention > 0}
+          href="/review"
+        />
         {showMoney && (
           <>
+            <KpiCard
+              label="Pending bills"
+              value={kpis.pendingProviderBills + kpis.pendingTransporterBills}
+              hint={`${kpis.pendingProviderBills} provider · ${kpis.pendingTransporterBills} transporter`}
+              icon={Scale}
+              tone="amber"
+              href="/reconciliation"
+            />
             <KpiCard
               label="Customer outstanding"
               value={formatINRCompact(kpis.customerOutstanding)}
@@ -247,6 +279,20 @@ export function DashboardPage() {
                 className="flex-col items-start gap-1.5"
               />
               <dl className="grid grid-cols-3 gap-3 border-t pt-4 text-center">
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    Received ({data.monthLabel.split(" ")[0]})
+                  </dt>
+                  <dd className="font-display text-xl font-bold">{automation.received}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Successful</dt>
+                  <dd className="font-display text-xl font-bold">{automation.success}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Auto-updated</dt>
+                  <dd className="font-display text-xl font-bold">{automation.autoUpdated}</dd>
+                </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Today</dt>
                   <dd className="font-display text-xl font-bold">{automation.today}</dd>

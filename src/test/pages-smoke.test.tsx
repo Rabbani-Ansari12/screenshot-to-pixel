@@ -19,7 +19,17 @@ import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { setSupabaseClient } from "@/lib/supabase";
 import { createFakeSupabase } from "./fake-supabase";
-import { EMPLOYEES, FINANCE_TOTALS, ID, ORDER_CODE, TRIP_CODE, fixtureTables } from "./fixtures";
+import {
+  DASHBOARD_SUMMARY,
+  EMPLOYEES,
+  FINANCE_TOTALS,
+  ID,
+  ORDER_CODE,
+  TRIP_CODE,
+  fixtureTables,
+  reportRun,
+} from "./fixtures";
+import { SystemPage } from "@/pages/admin/system-page";
 import { AppShell } from "@/components/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -87,7 +97,11 @@ function signInAs(userId: string | null) {
   const fake = createFakeSupabase({
     tables: fixtureTables(),
     userId,
-    rpc: { finance_totals: () => FINANCE_TOTALS },
+    rpc: {
+      finance_totals: () => FINANCE_TOTALS,
+      dashboard_summary: () => DASHBOARD_SUMMARY,
+      report_run: reportRun,
+    },
     functions: {
       "admin-manage-employee": (body) =>
         body["action"] === "list" ? { employees: EMPLOYEES } : {},
@@ -98,7 +112,8 @@ function signInAs(userId: string | null) {
 }
 
 const PAGES: [string, RegExp, () => ReactNode][] = [
-  ["/", /Good afternoon/, () => <DashboardPage />],
+  ["/", /Good (morning|afternoon|evening)/, () => <DashboardPage />],
+  ["/system", /Document jobs that need attention/, () => <SystemPage />],
   ["/documents", /Document Inbox/, () => <DocumentsPage />],
   [
     `/documents/${ID.docRecorded}`,

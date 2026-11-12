@@ -203,6 +203,11 @@ export function DriverUploadPage({ token }: { token: string }) {
               })
             : f.file,
         );
+        // Preview in the same position as its file (empty when there is none).
+        form.append(
+          "thumbs",
+          new File([prepared?.thumb ?? new Blob()], "thumb.jpg", { type: "image/jpeg" }),
+        );
       }
       const { status, json } = await postWithProgress(
         `${functionsUrl()}/driver-upload`,

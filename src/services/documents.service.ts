@@ -186,6 +186,7 @@ export function toDocumentRecord(d: DocRow, lk: Lookups): DocumentRecord {
     ref: docRef(d.id),
     type: DOC_TYPE_LABEL[d.doc_type],
     fileName: d.file_name ?? "document",
+    storagePath: d.storage_path,
     pages: d.page_count ?? 1,
     senderName: d.uploaded_by_label || (d.uploaded_by && lk.names.get(d.uploaded_by)) || "—",
     source: d.source === "driver_link" ? "Driver Link" : "Staff Upload",
@@ -253,8 +254,22 @@ async function docRow(id: string): Promise<DocRow> {
   return row;
 }
 
+/** Signed link to the small preview, or null when the document has none (PDFs, older uploads). */
+export async function thumbUrl(storagePath: string): Promise<string | null> {
+  if (!storagePath) return null;
+  const { data, error } = await sb()
+    .storage.from("documents")
+    .createSignedUrl(`${storagePath}.thumb.jpg`, SIGNED_URL_SECONDS);
+  return error ? null : (data?.signedUrl ?? null);
+}
+
+/** Document links expire quickly; the viewer asks for a new one when it reopens. */
+export const SIGNED_URL_SECONDS = 300;
+
 export async function signedUrl(path: string): Promise<string | null> {
-  const { data, error } = await sb().storage.from("documents").createSignedUrl(path, 3600);
+  const { data, error } = await sb()
+    .storage.from("documents")
+    .createSignedUrl(path, SIGNED_URL_SECONDS);
   return error ? null : (data?.signedUrl ?? null);
 }
 
@@ -346,6 +361,11 @@ export async function uploadOne(
     upsert: false,
   });
   if (up.error) throw new AppError(`Could not upload ${item.file.name}: ${up.error.message}`);
+  if (prepared.thumb)
+    await sb()
+      .storage.from("documents")
+      .upload(`${path}.thumb.jpg`, prepared.thumb, { contentType: "image/jpeg", upsert: false })
+      .catch(() => undefined);
   const tripHintId = item.tripHint ? await tripUuid(item.tripHint).catch(() => null) : null;
   const res = unwrap(
     await sb().rpc("register_uploaded_document", {

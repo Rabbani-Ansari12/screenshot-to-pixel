@@ -140,7 +140,7 @@ function RecentTab() {
       sortValue: (d) => d.type,
       cell: (d) => (
         <span className="flex items-center gap-3">
-          <DocumentThumbnail type={d.type} className="size-8" />
+          <DocumentThumbnail type={d.type} storagePath={d.storagePath} className="size-8" />
           <span className="min-w-0">
             <span className="block font-medium">{d.type}</span>
             <span className="block truncate text-xs text-muted-foreground">

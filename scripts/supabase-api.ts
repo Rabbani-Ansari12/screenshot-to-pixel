@@ -144,9 +144,19 @@ async function test() {
       await query(wrapped);
       output = "No TAP output (unexpected commit?)";
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const m = msg.match(/TAP_RESULT([\s\S]*?)(?:"|$)/);
-      output = m ? JSON.parse(`"${m[1]}"`) : msg;
+      const raw = e instanceof Error ? e.message : String(e);
+      // HTTP 400 body: {"message":"Failed to run sql query: ERROR:  P0001: TAP_RESULT<lines>CONTEXT…"}
+      let msg = raw;
+      const jsonStart = raw.indexOf("{");
+      if (jsonStart >= 0) {
+        try {
+          msg = (JSON.parse(raw.slice(jsonStart)) as { message?: string }).message ?? raw;
+        } catch {
+          msg = raw;
+        }
+      }
+      const m = msg.match(/TAP_RESULT([\s\S]*?)(?:\nCONTEXT:|$)/);
+      output = m ? m[1]! : msg;
     }
     console.log(`# ${file}\n${output}`);
     if (/^not ok|Looks like you failed|ERROR|HTTP \d/m.test(output)) failed++;

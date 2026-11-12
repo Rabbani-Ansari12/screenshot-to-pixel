@@ -45,6 +45,11 @@ export interface AuditEvent {
   note: string;
   /** Why the change was made (required for quantity / rate corrections). */
   reason?: string;
+  /** Database table, operation and the full row before / after (for the diff view). */
+  table?: string;
+  operation?: "INSERT" | "UPDATE" | "DELETE";
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
 }
 
 export interface AppSettings {
