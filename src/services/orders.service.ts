@@ -16,6 +16,7 @@ import { fetchOrders, fetchPurchases, fetchTrips, orderItemsFor, sb } from "./su
 import { num, orderPayload, orderStatusToDb, toOrder, toOrderView } from "./supabase/mappers";
 import { activeFilter, ilikeTerm, type Page, type TableQuery } from "./supabase/table-query";
 import { listEntityAudit } from "./admin.service";
+import { invoicesWhere, paymentsAgainstAny } from "./finance-links";
 
 export interface OrderDetail {
   order: OrderView;
@@ -107,15 +108,18 @@ export async function getOrder(id: string): Promise<OrderDetail> {
   const salesValue = num(p?.sales_value);
   const profit = num(p?.estimated_profit);
   const tripUuids = trips.map((t) => t.uuid ?? "").filter(Boolean);
-  const activity = await listEntityAudit([id, ...items.map((i) => i.id), ...tripUuids], 25);
+  const [activity, invoices] = await Promise.all([
+    listEntityAudit([id, ...items.map((i) => i.id), ...tripUuids], 25),
+    invoicesWhere({ order_id: id }),
+  ]);
+  const payments = await paymentsAgainstAny(invoices.map((i) => i.id));
   return {
     order: toOrderView(row, items),
     trips,
     purchases,
-    // Documents, invoices and payments move to Supabase with their own modules.
     documents: [],
-    invoices: [],
-    payments: [],
+    invoices,
+    payments,
     profit: {
       salesValue,
       purchaseCost: num(p?.purchase_cost),

@@ -259,6 +259,7 @@ export function toAppSettings(
       address: String(profile["address"] ?? ""),
       phone: String(profile["phone"] ?? ""),
       email: String(profile["email"] ?? ""),
+      bankDetails: String(profile["bank_details"] ?? ""),
     },
     gst: {
       gstin: String(gst["gstin"] ?? business?.gstin ?? ""),
@@ -271,6 +272,11 @@ export function toAppSettings(
       prefix: row.invoice_prefix,
       format: formatFor(row.invoice_number_width),
       nextNumber: row.next_invoice_number,
+    },
+    payments: {
+      allocation: row.payment_allocation === "oldest_first" ? "oldest_first" : "selected",
+      allowOverpayment: row.allow_overpayment,
+      billTolerance: Number(row.bill_amount_tolerance),
     },
     autoProcessThreshold: Math.round(Number(row.auto_process_confidence_threshold) * 100),
     authoritativeWeight: row.authoritative_weight === "loading" ? "Loading" : "Delivery",
@@ -346,7 +352,13 @@ export async function updateSettings(patch: Partial<AppSettings>): Promise<AppSe
       address: patch.business.address,
       phone: patch.business.phone,
       email: patch.business.email,
+      bank_details: patch.business.bankDetails,
     };
+  if (patch.payments) {
+    update.payment_allocation = patch.payments.allocation;
+    update.allow_overpayment = patch.payments.allowOverpayment;
+    update.bill_amount_tolerance = patch.payments.billTolerance;
+  }
   if (patch.autoProcessThreshold !== undefined)
     update.auto_process_confidence_threshold = Math.round(patch.autoProcessThreshold) / 100;
   if (patch.authoritativeWeight)

@@ -42,6 +42,9 @@ export type WeighbridgeFieldName =
 
 export type RawFields = Partial<Record<WeighbridgeFieldName, FieldValue>>;
 
+/** Whatever the extractor's schema returned (weight fields, or a bill with lines). */
+export type RawExtraction = Record<string, unknown>;
+
 /** Normalised extraction stored in documents.extracted (never edited afterwards). */
 export interface Extraction {
   doc_type: DocType;
@@ -57,7 +60,8 @@ export type ReviewReason =
   | "multiple_possible_matches"
   | "conflicting_weight_values"
   | "no_match"
-  | "vehicle_mismatch";
+  | "vehicle_mismatch"
+  | "financial_discrepancy";
 
 export interface Usage {
   prompt_tokens: number;
@@ -80,5 +84,5 @@ export interface AiClient {
   extract(
     file: AiFile,
     docType: DocType,
-  ): Promise<{ result: RawFields; raw: unknown; usage: Usage }>;
+  ): Promise<{ result: RawExtraction; raw: unknown; usage: Usage }>;
 }

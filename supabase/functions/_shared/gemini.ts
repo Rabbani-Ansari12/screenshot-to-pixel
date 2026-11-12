@@ -1,7 +1,7 @@
 // Gemini client for the pipeline. The SDK class is passed in so the same code runs in Deno
 // (npm:@google/genai) and in Node tests (@google/genai). Server-side only: the key never
 // reaches the browser.
-import type { AiClient, AiFile, DocType, RawFields, Usage } from "./doc-types.ts";
+import type { AiClient, AiFile, DocType, RawExtraction, Usage } from "./doc-types.ts";
 import { DOC_TYPES } from "./doc-types.ts";
 import { CLASSIFY_SCHEMA, CLASSIFY_SYSTEM, classifyPrompt } from "./prompts/classify.ts";
 import { extractorFor } from "./extractors.ts";
@@ -96,7 +96,7 @@ export function createGeminiClient(ai: GenAiLike, model: string): AiClient {
       const ex = extractorFor(docType);
       if (!ex) throw new AiResponseError(`No extractor for ${docType}`);
       const r = await call(file, ex.system, ex.prompt, ex.schema);
-      return { result: (r.parsed ?? {}) as RawFields, raw: r.raw, usage: r.usage };
+      return { result: (r.parsed ?? {}) as RawExtraction, raw: r.raw, usage: r.usage };
     },
   };
 }

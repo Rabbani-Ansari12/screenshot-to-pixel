@@ -20,6 +20,7 @@ import {
   type Page,
   type TableQuery,
 } from "./supabase/table-query";
+import { financeForTrip } from "./finance-links";
 
 export interface TripDetail {
   trip: TripView;
@@ -109,9 +110,11 @@ export async function getTrip(id: string): Promise<TripDetail> {
       .eq("trip_id", row.id ?? "")
       .maybeSingle(),
   );
-  const audit = await listEntityAudit([...ids, ...(delivery ? [delivery.id] : [])], 50);
-  // Documents, bills and invoices move to Supabase with their own modules.
-  return { trip, documents: [], bills: [], invoices: [], audit };
+  const [audit, finance] = await Promise.all([
+    listEntityAudit([...ids, ...(delivery ? [delivery.id] : [])], 50),
+    financeForTrip(row.id ?? ""),
+  ]);
+  return { trip, documents: [], bills: finance.bills, invoices: finance.invoices, audit };
 }
 
 export interface TripInput {

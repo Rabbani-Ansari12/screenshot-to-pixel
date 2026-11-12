@@ -1,60 +1,47 @@
+/**
+ * Profit and landed cost from the database views (v_order_profit, v_monthly_profit,
+ * v_landed_cost). Estimated profit = sales value − purchase − transport − expenses; customer
+ * cash received is never profit. "Final Settled" only when every bill and invoice of the order
+ * is reconciled and paid and the order is completed. Needs view_financial_reports.
+ */
 import type { MonthlyProfitView, OrderProfitView } from "@/types";
-import { formatMonth } from "@/lib/format";
-import { clone, db, delay } from "./core";
-import { lookup, profitOf, toInvoiceView, toOrderView, tripPurchaseCost } from "./views";
+import { rows } from "./supabase/errors";
+import { LIST_CAP, sb } from "./supabase/fetch";
+import { toMonthlyProfitView, toOrderProfitView } from "./supabase/finance-mappers";
+import { num, unitFromDb } from "./supabase/mappers";
 
-/** Profit per order. "Final Settled" only when the order is complete and every invoice is paid. */
-// TODO(backend): supabase.rpc("order_profit")
 export async function getOrderProfits(): Promise<OrderProfitView[]> {
-  await delay();
-  return clone(
-    db.orders
-      .filter((o) => db.trips.some((t) => t.orderId === o.id))
-      .map((order) => {
-        const trips = db.trips.filter((t) => t.orderId === order.id);
-        const breakdown = profitOf(
-          trips,
-          db.expenses.filter((e) => e.orderId === order.id),
-        );
-        const invoices = db.invoices.filter((i) => i.orderId === order.id).map(toInvoiceView);
-        const settled =
-          order.status === "Completed" &&
-          trips.every((t) => t.delivery) &&
-          invoices.length > 0 &&
-          invoices.every((i) => i.paymentStatus === "Paid");
-        const view = toOrderView(order);
-        return {
-          ...breakdown,
-          orderId: order.id,
-          orderRef: order.ref,
-          customerName: view.customerName,
-          status: settled ? ("Final Settled" as const) : ("Estimated" as const),
-          deliveredQty: view.deliveredQty,
-          unitLabel: view.unitLabel,
-        };
-      })
-      .reverse(),
+  const list = rows(
+    await sb()
+      .from("v_order_profit")
+      .select("*")
+      .gt("trip_count", 0)
+      .order("order_code", { ascending: false })
+      .limit(LIST_CAP),
   );
+  const items = list.length
+    ? rows(
+        await sb()
+          .from("order_items")
+          .select("order_id, unit")
+          .in(
+            "order_id",
+            list.map((o) => o.order_id ?? ""),
+          ),
+      )
+    : [];
+  const unitOf = new Map<string, string>();
+  for (const i of items) {
+    const u = unitFromDb(i.unit);
+    const prev = unitOf.get(i.order_id);
+    unitOf.set(i.order_id, prev && prev !== u ? "mixed" : u);
+  }
+  return list.map((r) => toOrderProfitView(r, unitOf.get(r.order_id ?? "") ?? "MT"));
 }
 
-/** Month-wise P&L. Trips count in the month they were delivered (or loaded, if still on the road). */
 export async function getMonthlyProfits(): Promise<MonthlyProfitView[]> {
-  await delay();
-  const months = [
-    ...new Set(db.trips.map((t) => (t.delivery?.at ?? t.loading.at).slice(0, 7))),
-  ].sort();
-  return clone(
-    months.map((month) => {
-      const trips = db.trips.filter((t) => (t.delivery?.at ?? t.loading.at).startsWith(month));
-      const expenses = db.expenses.filter((e) => e.date.startsWith(month));
-      return {
-        ...profitOf(trips, expenses),
-        month,
-        label: formatMonth(month),
-        status: month < "2026-10" ? ("Final Settled" as const) : ("Estimated" as const),
-      };
-    }),
-  );
+  const list = rows(await sb().from("v_monthly_profit").select("*").order("month"));
+  return list.map(toMonthlyProfitView);
 }
 
 export interface LandedCostRow {
@@ -69,49 +56,30 @@ export interface LandedCostRow {
   marginPerUnit: number;
 }
 
+/** Landed cost per unit = (purchase + transport) / loaded quantity, by material and by provider. */
 export async function getLandedCosts(): Promise<{
   byMaterial: LandedCostRow[];
   byProvider: LandedCostRow[];
 }> {
-  await delay();
-  const build = (key: string, label: string, trips: typeof db.trips): LandedCostRow => {
-    const qty = trips.reduce((s, t) => s + t.loading.net, 0) || 1;
-    const purchase = trips.reduce((s, t) => s + tripPurchaseCost(t), 0) / qty;
-    const transport = trips.reduce((s, t) => s + t.freight, 0) / qty;
-    const selling =
-      trips.reduce(
-        (s, t) =>
-          s +
-          (lookup.order(t.orderId)?.items.find((i) => i.materialId === t.materialId)?.sellingRate ??
-            0) *
-            t.loading.net,
-        0,
-      ) / qty;
-    const unit = lookup.material(trips[0]?.materialId ?? "")?.unit ?? "MT";
+  const list = rows(await sb().from("v_landed_cost").select("*").order("material_name"));
+  const toRow = (r: (typeof list)[number]): LandedCostRow => {
+    const landed = num(r.landed_per_unit);
+    const selling = num(r.selling_per_unit);
     return {
-      key,
-      label,
-      unit,
-      quantity: Math.round(qty * 100) / 100,
-      purchaseRate: Math.round(purchase),
-      transportPerUnit: Math.round(transport),
-      landedCost: Math.round(purchase + transport),
-      sellingRate: Math.round(selling),
-      marginPerUnit: Math.round(selling - purchase - transport),
+      key: r.provider_id ? `${r.provider_id}|${r.material_id}` : (r.material_id ?? ""),
+      label: r.provider_id
+        ? `${r.provider_name ?? "Own stock"} · ${r.material_name}`
+        : (r.material_name ?? ""),
+      unit: unitFromDb(r.unit),
+      quantity: num(r.quantity),
+      purchaseRate: num(r.purchase_per_unit),
+      transportPerUnit: num(r.transport_per_unit),
+      landedCost: landed,
+      sellingRate: selling,
+      marginPerUnit: Math.round((selling - landed) * 100) / 100,
     };
   };
-  const byMaterial = db.materials
-    .map((m) => ({ m, trips: db.trips.filter((t) => t.materialId === m.id) }))
-    .filter((x) => x.trips.length)
-    .map(({ m, trips }) => build(m.id, m.name, trips));
-  const byProvider = db.providers.flatMap((p) =>
-    db.materials
-      .map((m) => ({
-        m,
-        trips: db.trips.filter((t) => t.providerId === p.id && t.materialId === m.id && !t.yardId),
-      }))
-      .filter((x) => x.trips.length >= 2)
-      .map(({ m, trips }) => build(`${p.id}|${m.id}`, `${p.name} · ${m.name}`, trips)),
-  );
-  return clone({ byMaterial, byProvider });
+  const byMaterial = list.filter((r) => r.level === "material").map(toRow);
+  const byProvider = list.filter((r) => r.level === "provider").map(toRow);
+  return { byMaterial, byProvider };
 }

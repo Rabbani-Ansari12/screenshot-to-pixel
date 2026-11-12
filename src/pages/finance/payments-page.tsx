@@ -13,28 +13,70 @@ import {
   series,
 } from "@/components/charts";
 import { ErrorState, InfoNote, KpiCard, SectionCard } from "@/components/common";
-import { DataTable, optionsFrom } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { paymentColumns } from "@/components/record-columns";
 import { SimpleTable } from "@/components/simple-table";
-import { useOutstanding, usePayments } from "@/hooks/queries";
-import { DEMO_TODAY, formatINR, formatINRCompact } from "@/lib/format";
+import { useFinanceTotals, useOutstanding, usePaymentsPage } from "@/hooks/queries";
+import { useAuth } from "@/lib/auth";
+import { formatINR, formatINRCompact } from "@/lib/format";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { PaymentDialog } from "./payment-form";
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
+/** One direction of payments, paged and filtered on the server. */
+function PaymentsTable({ direction }: { direction: "Incoming" | "Outgoing" }) {
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = usePaymentsPage(query);
+  if (error) return <ErrorState error={error} />;
+  return (
+    <DataTable
+      data={data?.rows}
+      isLoading={isLoading || !query}
+      server={{
+        total: data?.total ?? 0,
+        onQueryChange: (q) => setQuery({ ...q, filters: { ...q.filters, direction } }),
+      }}
+      columns={paymentColumns()}
+      getRowId={(p) => p.id}
+      searchText={(p) => `${p.ref} ${p.partyName} ${p.againstLabel} ${p.reference}`}
+      searchPlaceholder="Search party, invoice, reference…"
+      filters={[
+        ...(direction === "Outgoing"
+          ? [
+              {
+                id: "partyType",
+                label: "Paid to",
+                options: ["Provider", "Transporter"].map((m) => ({ value: m, label: m })),
+                value: (p: { partyType: string }) => p.partyType,
+              },
+            ]
+          : []),
+        {
+          id: "mode",
+          label: "Modes",
+          options: ["UPI", "Bank Transfer", "Cheque", "Cash"].map((m) => ({ value: m, label: m })),
+          value: (p) => p.mode,
+        },
+      ]}
+      dateValue={(p) => p.date}
+      defaultSort={{ id: "date", desc: true }}
+      exportName={`${direction.toLowerCase()}-payments`}
+    />
+  );
+}
+
 export function PaymentsPage({ record }: { record?: string }) {
-  const { data, isLoading, error } = usePayments();
+  const { data: totals, error } = useFinanceTotals();
   const { data: outstanding } = useOutstanding();
+  const { can } = useAuth();
   const [tab, setTab] = useState("incoming");
   const [open, setOpen] = useState(false);
   useEffect(() => {
     if (record) setOpen(true);
   }, [record]);
   if (error) return <ErrorState error={error} />;
-  const month = DEMO_TODAY.slice(0, 7);
-  const incoming = data?.filter((p) => p.direction === "Incoming");
-  const outgoing = data?.filter((p) => p.direction === "Outgoing");
   const receivables = outstanding?.filter((o) => o.partyType === "Customer") ?? [];
   const payables = outstanding?.filter((o) => o.partyType !== "Customer") ?? [];
   const bucket = (rows: PartyBalance[], k: "current" | "d30" | "d60" | "d90") =>
@@ -52,59 +94,29 @@ export function PaymentsPage({ record }: { record?: string }) {
     payable: bucket(payables, k),
   }));
 
-  const table = (rows: typeof data, name: string) => (
-    <DataTable
-      data={rows}
-      isLoading={isLoading}
-      columns={paymentColumns()}
-      getRowId={(p) => p.id}
-      searchText={(p) => `${p.ref} ${p.partyName} ${p.againstLabel} ${p.reference}`}
-      searchPlaceholder="Search party, invoice, reference…"
-      filters={[
-        {
-          id: "party",
-          label: "Parties",
-          options: optionsFrom(rows?.map((p) => p.partyName) ?? []),
-          value: (p) => p.partyName,
-        },
-        {
-          id: "mode",
-          label: "Modes",
-          options: ["UPI", "Bank Transfer", "Cheque", "Cash"].map((m) => ({ value: m, label: m })),
-          value: (p) => p.mode,
-        },
-      ]}
-      dateValue={(p) => p.date}
-      defaultSort={{ id: "date", desc: true }}
-      exportName={name}
-    />
-  );
-
   return (
     <>
       <PageHeader
         title="Payments"
         description="Money in from customers and out to providers and transporters. Partial payments are fine."
         actions={
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="size-4" /> Record payment
-          </Button>
+          can("record_payments") && (
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="size-4" /> Record payment
+            </Button>
+          )
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Received this month"
-          value={formatINRCompact(
-            sum(incoming?.filter((p) => p.date.startsWith(month)).map((p) => p.amount) ?? []),
-          )}
+          value={totals ? formatINRCompact(totals.receivedMonth) : "—"}
           icon={ArrowDownLeft}
           tone="green"
         />
         <KpiCard
           label="Paid out this month"
-          value={formatINRCompact(
-            sum(outgoing?.filter((p) => p.date.startsWith(month)).map((p) => p.amount) ?? []),
-          )}
+          value={totals ? formatINRCompact(totals.paidMonth) : "—"}
           icon={ArrowUpRight}
           tone="amber"
         />
@@ -224,16 +236,14 @@ export function PaymentsPage({ record }: { record?: string }) {
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="incoming">Incoming · customers ({incoming?.length ?? 0})</TabsTrigger>
-          <TabsTrigger value="outgoing">
-            Outgoing · providers & transporters ({outgoing?.length ?? 0})
-          </TabsTrigger>
+          <TabsTrigger value="incoming">Incoming · customers</TabsTrigger>
+          <TabsTrigger value="outgoing">Outgoing · providers & transporters</TabsTrigger>
         </TabsList>
         <TabsContent value="incoming" className="mt-4">
-          {table(incoming, "incoming-payments")}
+          <PaymentsTable direction="Incoming" />
         </TabsContent>
         <TabsContent value="outgoing" className="mt-4">
-          {table(outgoing, "outgoing-payments")}
+          <PaymentsTable direction="Outgoing" />
         </TabsContent>
       </Tabs>
       <InfoNote className="mt-4">

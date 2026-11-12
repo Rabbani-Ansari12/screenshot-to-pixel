@@ -19,7 +19,8 @@ import {
   useOrder,
   useSettings,
 } from "@/hooks/queries";
-import { DEMO_TODAY, formatDate, formatINR, formatNumber } from "@/lib/format";
+import { formatDate, formatINR, formatNumber, todayIST } from "@/lib/format";
+import { gstModeFor, gstStateCode } from "@/lib/gst";
 import { InvoiceDocument, type InvoiceDocLine } from "./invoice-document";
 
 export function InvoiceCreatePage({ orderId: initialOrder }: { orderId?: string }) {
@@ -29,22 +30,26 @@ export function InvoiceCreatePage({ orderId: initialOrder }: { orderId?: string 
   const [customerId, setCustomerId] = useState("");
   const [orderId, setOrderId] = useState(initialOrder ?? "");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [gstMode, setGstMode] = useState<GstMode>("CGST+SGST");
-  const [date, setDate] = useState(DEMO_TODAY);
+  const [gstOn, setGstOn] = useState(true);
+  const [date, setDate] = useState(todayIST());
   const [charges, setCharges] = useState<AdditionalCost[]>([]);
   const [notes, setNotes] = useState("");
   const { data: trips, isLoading: tripsLoading } = useInvoiceableTrips(orderId);
   const { data: orderDetail } = useOrder(orderId);
-  const create = useAction(api.invoices.createInvoice, (i) => `Invoice ${i.number} created`);
+  const create = useAction(
+    api.invoices.createInvoice,
+    (i) => `Invoice ${i.number} created (${i.gstMode === "None" ? "no GST" : i.gstMode})`,
+  );
 
   useEffect(() => {
     if (initialOrder && options)
       setCustomerId(options.orders.find((o) => o.id === initialOrder)?.customerId ?? "");
   }, [initialOrder, options]);
   const customer = options?.customers.find((c) => c.id === customerId);
-  useEffect(() => {
-    if (customer) setGstMode(customer.state === "Maharashtra" ? "CGST+SGST" : "IGST");
-  }, [customer]);
+  // Same rule as the database: place of supply (customer GSTIN / state) vs our state.
+  const placeMode = gstModeFor(settings?.gst.stateCode, customer ?? {}, settings?.gst.defaultMode);
+  const gstMode: GstMode = gstOn ? placeMode : "None";
+  const placeCode = gstStateCode(customer?.gstin) ?? gstStateCode(customer?.state);
   useEffect(() => {
     setSelected(new Set((trips ?? []).map((t) => t.id)));
   }, [trips]);
@@ -224,28 +229,27 @@ export function InvoiceCreatePage({ orderId: initialOrder }: { orderId?: string 
                 <Label>GST</Label>
                 <ToggleGroup
                   type="single"
-                  value={gstMode}
-                  onValueChange={(v) => v && setGstMode(v as GstMode)}
+                  value={gstOn ? "on" : "off"}
+                  onValueChange={(v) => v && setGstOn(v === "on")}
                   variant="outline"
                   className="w-full"
-                  aria-label="GST mode"
+                  aria-label="GST"
                 >
-                  <ToggleGroupItem value="CGST+SGST" className="flex-1">
-                    CGST + SGST
+                  <ToggleGroupItem value="on" className="flex-1">
+                    {placeMode === "IGST" ? "IGST" : "CGST + SGST"}
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="IGST" className="flex-1">
-                    IGST
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="None" className="flex-1">
+                  <ToggleGroupItem value="off" className="flex-1">
                     No GST
                   </ToggleGroupItem>
                 </ToggleGroup>
                 <p className="text-xs text-muted-foreground">
                   {customer
-                    ? customer.state === "Maharashtra"
-                      ? "Same state as us → CGST + SGST"
-                      : `Customer in ${customer.state} → IGST`
-                    : "Chosen from the customer's state"}
+                    ? placeCode
+                      ? placeMode === "IGST"
+                        ? `Place of supply ${placeCode} (${customer.state || "other state"}) → IGST`
+                        : `Place of supply ${placeCode}, same state as us → CGST + SGST`
+                      : "Customer state unknown → default tax mode from settings"
+                    : "Split by the customer's place of supply"}
                 </p>
               </div>
             </div>
@@ -311,7 +315,7 @@ export function InvoiceCreatePage({ orderId: initialOrder }: { orderId?: string 
           <InvoiceDocument
             draft
             settings={settings}
-            number={`${settings?.invoiceNumbering.prefix ?? "INV"}-2026-${String(settings?.invoiceNumbering.nextNumber ?? 0).padStart(4, "0")}`}
+            number={`${settings?.invoiceNumbering.prefix ?? "INV"}-${date.slice(0, 4)}-${String(settings?.invoiceNumbering.nextNumber ?? 0).padStart(4, "0")}`}
             date={date}
             dueDate={due.toISOString().slice(0, 10)}
             customer={{
@@ -321,7 +325,8 @@ export function InvoiceCreatePage({ orderId: initialOrder }: { orderId?: string 
               state: customer?.state ?? "",
             }}
             siteName={site?.name ?? ""}
-            orderRef={orderId}
+            orderRef={options?.orders.find((o) => o.id === orderId)?.ref ?? ""}
+            placeOfSupply={placeCode ?? ""}
             lines={lines}
             gstMode={gstMode}
             additionalCharges={charges.filter((c) => Number.isFinite(c.amount))}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Boxes, Plus, Warehouse } from "lucide-react";
+import { Boxes, Plus, SlidersHorizontal, Warehouse } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { QuickAddDialog } from "@/components/quick-add-dialog";
@@ -17,14 +17,17 @@ import { ErrorState, InfoNote, PageSkeleton } from "@/components/common";
 import { DataTable, optionsFrom, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { api, useAction, useStock } from "@/hooks/queries";
-import { formatDate, formatNumber, formatQty } from "@/lib/format";
+import { api, useAction, useMaterials, useStock } from "@/hooks/queries";
+import { formatDate, formatNumber, formatQty, todayIST } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export function StockPage() {
   const [yard, setYard] = useState("all");
   const [addingYard, setAddingYard] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
   const { data, isLoading, error } = useStock(yard);
+  const { data: materials } = useMaterials();
+  const adjust = useAction(api.stock.adjustStock, "Stock adjusted", { invalidate: [["stock"]] });
   const addYard = useAction(api.masters.addYard, (y) => `${y.name} added`, {
     invalidate: [["stock"], ["options"]],
   });
@@ -133,6 +136,11 @@ export function StockPage() {
               <Button variant="outline" onClick={() => setAddingYard(true)}>
                 <Plus className="size-4" /> Add yard
               </Button>
+              {data.yards.length > 0 && (
+                <Button variant="outline" onClick={() => setAdjusting(true)}>
+                  <SlidersHorizontal className="size-4" /> Adjust stock
+                </Button>
+              )}
             </Can>
             <Select value={yard} onValueChange={setYard}>
               <SelectTrigger className="w-[220px]" aria-label="Yard">
@@ -230,6 +238,50 @@ export function StockPage() {
         ]}
         onSubmit={(v) => addYard.mutateAsync(v)}
         submitLabel="Add yard"
+      />
+      <QuickAddDialog
+        open={adjusting}
+        onOpenChange={setAdjusting}
+        title="Adjust stock"
+        description="Correct a yard balance after a physical count. Use a negative quantity to remove stock. Purchases and trips are not changed."
+        schema={z.object({
+          yardId: z.string().min(1, "Choose a yard"),
+          materialId: z.string().min(1, "Choose a material"),
+          quantity: z.coerce
+            .number({ invalid_type_error: "Enter a quantity" })
+            .refine((n) => n !== 0, "Must not be zero"),
+          date: z.string().min(1, "Required"),
+          reason: z.string().min(5, "Say why (saved in audit history)"),
+        })}
+        defaults={{
+          yardId: yard === "all" ? (data.yards[0]?.id ?? "") : yard,
+          materialId: "",
+          quantity: 0,
+          date: todayIST(),
+          reason: "",
+        }}
+        fields={[
+          {
+            name: "yardId",
+            label: "Yard",
+            type: "select",
+            options: data.yards.map((y) => ({ value: y.id, label: y.name })),
+          },
+          {
+            name: "materialId",
+            label: "Material",
+            type: "select",
+            options: (materials ?? []).map((m) => ({
+              value: m.id,
+              label: `${m.name} (${m.unit})`,
+            })),
+          },
+          { name: "quantity", label: "Quantity (+ add / − remove)", type: "number" },
+          { name: "date", label: "Date (yyyy-mm-dd)" },
+          { name: "reason", label: "Reason", full: true },
+        ]}
+        onSubmit={(v) => adjust.mutateAsync(v)}
+        submitLabel="Save adjustment"
       />
     </>
   );

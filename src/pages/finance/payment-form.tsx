@@ -28,17 +28,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { EntityPicker } from "@/components/entity-picker";
 import {
   api,
   useAction,
-  useInvoices,
-  useBills,
   useMasterOptions,
   useOpenDocuments,
+  usePaymentTarget,
+  useSettings,
 } from "@/hooks/queries";
-import { DEMO_TODAY, formatDate, formatINR } from "@/lib/format";
+import { formatDate, formatINR, todayIST } from "@/lib/format";
+
+/** Select value meaning "let the database apply it to the oldest open invoices / bills". */
+const OLDEST = "oldest";
 import { cn } from "@/lib/utils";
 
 const schema = z
@@ -46,6 +50,7 @@ const schema = z
     partyType: z.enum(["Customer", "Provider", "Transporter"]),
     partyId: z.string().min(1, "Choose a party"),
     againstId: z.string().min(1, "Choose an invoice or bill"),
+    allowExcess: z.boolean(),
     date: z.string().min(1, "Required"),
     amount: z.number({ invalid_type_error: "Enter amount" }).positive("Must be more than 0"),
     mode: z.enum(["UPI", "Bank Transfer", "Cheque", "Cash"]),
@@ -69,55 +74,48 @@ export function PaymentDialog({
   preset?: string | undefined;
 }) {
   const { data: options } = useMasterOptions();
-  const { data: invoices } = useInvoices();
-  const { data: bills } = useBills();
+  const { data: settings } = useSettings();
+  const { data: target } = usePaymentTarget(open ? (preset ?? "") : "");
+  const oldestFirst = settings?.payments.allocation === "oldest_first";
+  const advances = Boolean(settings?.payments.allowOverpayment);
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
       partyType: "Customer",
       partyId: "",
       againstId: "",
-      date: DEMO_TODAY,
+      date: todayIST(),
       amount: Number.NaN,
       mode: "Bank Transfer",
       reference: "",
       notes: "",
+      allowExcess: false,
     },
   });
-  const [partyType, partyId, againstId, amount] = form.watch([
+  const [partyType, partyId, againstId, amount, allowExcess] = form.watch([
     "partyType",
     "partyId",
     "againstId",
     "amount",
+    "allowExcess",
   ]);
   const { data: openDocs } = useOpenDocuments(partyType, partyId);
   const record = useAction(
     api.payments.recordPayment,
     (p) =>
-      `${p.direction === "Incoming" ? "Receipt" : "Payment"} of ${formatINR(p.amount)} recorded`,
+      `Recorded ${p.ref}${p.onAccount > 0 ? ` · ${formatINR(p.onAccount)} kept on account` : ""}`,
   );
 
   useEffect(() => {
-    if (!open || !preset) return;
-    const inv = invoices?.find((i) => i.id === preset);
-    const bill = bills?.find((b) => b.id === preset);
-    if (inv)
-      form.reset({
-        ...form.getValues(),
-        partyType: "Customer",
-        partyId: inv.customerId,
-        againstId: inv.id,
-        amount: inv.balance,
-      });
-    else if (bill)
-      form.reset({
-        ...form.getValues(),
-        partyType: bill.kind,
-        partyId: bill.partyId,
-        againstId: bill.id,
-        amount: bill.outstanding,
-      });
-  }, [open, preset, invoices, bills, form]);
+    if (!open || !target) return;
+    form.reset({
+      ...form.getValues(),
+      partyType: target.partyType,
+      partyId: target.partyId,
+      againstId: target.id,
+      amount: target.balance,
+    });
+  }, [open, target, form]);
 
   const parties = useMemo(() => {
     const list =
@@ -129,15 +127,20 @@ export function PaymentDialog({
     return (list ?? []).map((p) => ({ value: p.id, label: p.name, hint: p.city }));
   }, [partyType, options]);
   const doc = openDocs?.find((d) => d.id === againstId);
-  const remaining = doc ? doc.balance - (Number.isFinite(amount) ? amount : 0) : null;
+  const openTotal = (openDocs ?? []).reduce((s, d) => s + d.balance, 0);
+  const balance = againstId === OLDEST ? openTotal : (doc?.balance ?? null);
+  const remaining = balance !== null ? balance - (Number.isFinite(amount) ? amount : 0) : null;
 
   const submit = async (v: Values) => {
-    if (doc && v.amount > doc.balance + 1) {
-      form.setError("amount", { message: `More than the balance of ${formatINR(doc.balance)}` });
+    if (balance !== null && v.amount > balance + 1 && !(advances && v.allowExcess)) {
+      form.setError("amount", {
+        message: `More than the outstanding ${formatINR(balance)}${advances ? " — tick “keep the extra as an advance”" : ""}`,
+      });
       return;
     }
     await record.mutateAsync({
       ...v,
+      againstId: v.againstId === OLDEST ? "" : v.againstId,
       direction: v.partyType === "Customer" ? "Incoming" : "Outgoing",
     });
     form.reset();
@@ -236,6 +239,7 @@ export function PaymentDialog({
                       field.onChange(v);
                       const d = openDocs?.find((x) => x.id === v);
                       if (d) form.setValue("amount", d.balance);
+                      if (v === OLDEST) form.setValue("amount", openTotal);
                     }}
                     disabled={!partyId}
                   >
@@ -253,6 +257,11 @@ export function PaymentDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      {oldestFirst && (openDocs?.length ?? 0) > 1 && (
+                        <SelectItem value={OLDEST}>
+                          Oldest open first · {openDocs?.length} open · {formatINR(openTotal)}
+                        </SelectItem>
+                      )}
                       {openDocs?.map((d) => (
                         <SelectItem key={d.id} value={d.id}>
                           {d.label} · {formatDate(d.date)} · balance {formatINR(d.balance)}
@@ -334,6 +343,25 @@ export function PaymentDialog({
                 )}
               />
             </div>
+            {advances && (
+              <FormField
+                control={form.control}
+                name="allowExcess"
+                render={({ field }) => (
+                  <FormItem className="flex items-center gap-2 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={(c) => field.onChange(c === true)}
+                      />
+                    </FormControl>
+                    <FormLabel className="font-normal">
+                      Keep anything above the balance as an advance (on account)
+                    </FormLabel>
+                  </FormItem>
+                )}
+              />
+            )}
             {doc && (
               <div
                 className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3 text-center text-sm"
@@ -352,7 +380,7 @@ export function PaymentDialog({
                   <p
                     className={cn(
                       "font-semibold tabular-nums",
-                      remaining !== null && remaining < -1
+                      remaining !== null && remaining < -1 && !allowExcess
                         ? "text-rose-600"
                         : remaining !== null && remaining <= 1
                           ? "text-emerald-600"

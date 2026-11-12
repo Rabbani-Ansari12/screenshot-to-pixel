@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import type { BillView, InvoiceView } from "@/types";
+import type { BillKind, BillView, InvoiceView } from "@/types";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataTable, optionsFrom, type Column } from "@/components/data-table";
+import { DataTable, type Column } from "@/components/data-table";
 import { ErrorState, InfoNote } from "@/components/common";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { useBills, useInvoices } from "@/hooks/queries";
+import { useBillsPage, useFinanceTotals, useInvoicesPage, useMasterOptions } from "@/hooks/queries";
 import { formatDate, formatINR } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -199,28 +200,25 @@ const invoiceCols: Column<InvoiceView>[] = [
   },
 ];
 
-export function ReconciliationPage() {
-  const { data: bills, isLoading, error } = useBills();
-  const { data: invoices, isLoading: invLoading } = useInvoices();
-  const [tab, setTab] = useState("provider");
+function BillQueue({ kind }: { kind: BillKind }) {
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useBillsPage(kind, query);
+  const { data: options } = useMasterOptions();
+  const parties = kind === "Provider" ? options?.providers : options?.transporters;
   if (error) return <ErrorState error={error} />;
-  const provider = bills?.filter((b) => b.kind === "Provider");
-  const transporter = bills?.filter((b) => b.kind === "Transporter");
-  const pending = (list?: BillView[]) =>
-    list?.filter((b) => ["Mismatch", "Unreconciled", "Matched"].includes(b.reconStatus)).length ??
-    0;
-  const billTable = (list: BillView[] | undefined, name: string) => (
+  return (
     <DataTable
-      data={list}
-      isLoading={isLoading}
+      data={data?.rows}
+      isLoading={isLoading || !query}
+      server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
       columns={billCols()}
       getRowId={(b) => b.id}
       rowHref={(b) => `/reconciliation/${b.id}`}
-      searchText={(b) => `${b.billNo} ${b.partyName} ${b.id}`}
+      searchText={(b) => `${b.billNo} ${b.partyName}`}
       searchPlaceholder="Search bill no., party…"
       filters={[
         {
-          id: "status",
+          id: "recon",
           label: "Statuses",
           options: RECON.map((s) => ({ value: s, label: s })),
           value: (b) => b.reconStatus,
@@ -228,15 +226,49 @@ export function ReconciliationPage() {
         {
           id: "party",
           label: "Parties",
-          options: optionsFrom(list?.map((b) => b.partyName) ?? []),
-          value: (b) => b.partyName,
+          options: (parties ?? []).map((p) => ({ value: p.id, label: p.name })),
+          value: (b) => b.partyId,
         },
       ]}
       dateValue={(b) => b.date}
-      defaultSort={{ id: "bill", desc: true }}
-      exportName={name}
+      defaultSort={{ id: "date", desc: true }}
+      exportName={`${kind.toLowerCase()}-bill-reconciliation`}
     />
   );
+}
+
+function InvoiceQueue() {
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useInvoicesPage(query);
+  if (error) return <ErrorState error={error} />;
+  return (
+    <DataTable
+      data={data?.rows}
+      isLoading={isLoading || !query}
+      server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
+      columns={invoiceCols}
+      getRowId={(i) => i.id}
+      rowHref={(i) => `/reconciliation/${i.id}`}
+      searchText={(i) => `${i.number} ${i.customerName} ${i.orderRef}`}
+      searchPlaceholder="Search invoice, customer…"
+      filters={[
+        {
+          id: "recon",
+          label: "Checks",
+          options: RECON.map((s) => ({ value: s, label: s })),
+          value: (i) => i.reconStatus,
+        },
+      ]}
+      dateValue={(i) => i.date}
+      defaultSort={{ id: "date", desc: true }}
+      exportName="invoice-verification"
+    />
+  );
+}
+
+export function ReconciliationPage() {
+  const { data: totals } = useFinanceTotals();
+  const [tab, setTab] = useState("provider");
   return (
     <>
       <PageHeader
@@ -246,65 +278,31 @@ export function ReconciliationPage() {
       <InfoNote className="mb-4">
         Reconciliation never changes bills or trip records. You decide: approve a difference,
         dispute it, or ask the party for a correction.
+        {totals && totals.billsNeedingAttention > 0 && (
+          <strong> {totals.billsNeedingAttention} bill(s) need attention.</strong>
+        )}
       </InfoNote>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="provider">
-            Provider Bills{" "}
-            {pending(provider) > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-amber-950">
-                {pending(provider)}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="transporter">
-            Transporter Bills{" "}
-            {pending(transporter) > 0 && (
-              <span className="ml-1.5 rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-amber-950">
-                {pending(transporter)}
-              </span>
-            )}
-          </TabsTrigger>
+          <TabsTrigger value="provider">Provider Bills</TabsTrigger>
+          <TabsTrigger value="transporter">Transporter Bills</TabsTrigger>
           <TabsTrigger value="invoices">
             Customer Invoices{" "}
-            {(invoices?.filter((i) => i.flags.length).length ?? 0) > 0 && (
+            {(totals?.invoicesFlagged ?? 0) > 0 && (
               <span className="ml-1.5 rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">
-                {invoices?.filter((i) => i.flags.length).length}
+                {totals?.invoicesFlagged}
               </span>
             )}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="provider" className="mt-4">
-          {billTable(provider, "provider-bill-reconciliation")}
+          <BillQueue kind="Provider" />
         </TabsContent>
         <TabsContent value="transporter" className="mt-4">
-          {billTable(transporter, "transporter-bill-reconciliation")}
+          <BillQueue kind="Transporter" />
         </TabsContent>
         <TabsContent value="invoices" className="mt-4">
-          <DataTable
-            data={invoices}
-            isLoading={invLoading}
-            columns={invoiceCols}
-            getRowId={(i) => i.id}
-            rowHref={(i) => `/reconciliation/${i.id}`}
-            searchText={(i) => `${i.number} ${i.customerName} ${i.orderRef}`}
-            searchPlaceholder="Search invoice, customer…"
-            filters={[
-              {
-                id: "check",
-                label: "Checks",
-                options: [
-                  { value: "flagged", label: "Flagged" },
-                  { value: "passed", label: "Passed" },
-                ],
-                value: (i) => (i.flags.length ? "flagged" : "passed"),
-              },
-            ]}
-            initialFilters={{ check: "flagged" }}
-            dateValue={(i) => i.date}
-            defaultSort={{ id: "inv", desc: true }}
-            exportName="invoice-verification"
-          />
+          <InvoiceQueue />
         </TabsContent>
       </Tabs>
     </>

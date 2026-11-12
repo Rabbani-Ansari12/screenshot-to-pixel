@@ -85,6 +85,13 @@ export interface InvoiceView extends Invoice {
   balance: number;
   paymentStatus: PaymentStatus;
   overdueDays: number;
+  /** Lifecycle: draft invoices can still be issued, cancelled ones carry no balance. */
+  status?: "Draft" | "Issued" | "Cancelled";
+  cgst?: number;
+  sgst?: number;
+  igst?: number;
+  /** GST state code of the place of supply (e.g. "27"). */
+  placeOfSupply?: string;
 }
 
 export interface PaymentView extends Payment {

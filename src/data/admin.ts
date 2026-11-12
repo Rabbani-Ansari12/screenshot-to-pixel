@@ -271,6 +271,7 @@ export const settings: AppSettings = {
     address: "Gat 214, Hadapsar Industrial Estate, Pune, Maharashtra 411013",
     phone: "+91 20 2681 4400",
     email: "accounts@meridiansupply.in",
+    bankDetails: "HDFC Bank, Hadapsar · A/c 50200012345678 · IFSC HDFC0001234",
   },
   gst: {
     gstin: "27AABCM1234K1ZQ",
@@ -284,6 +285,7 @@ export const settings: AppSettings = {
     format: "{PREFIX}-{YYYY}-{SEQ:4}",
     nextNumber: 301 + invoices.length,
   },
+  payments: { allocation: "selected", allowOverpayment: false, billTolerance: 1 },
   autoProcessThreshold: 85,
   authoritativeWeight: "Delivery",
   enabledUnits: ["MT", "Brass", "Trips", "CFT", "m³"],

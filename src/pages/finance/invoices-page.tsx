@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
@@ -8,69 +9,84 @@ import {
   Printer,
   ReceiptIndianRupee,
   Scale,
+  Send,
   Wallet,
+  XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { Button } from "@/components/ui/button";
-import { DataTable, optionsFrom } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DetailSkeleton, ErrorState, InfoNote, KpiCard, SectionCard } from "@/components/common";
 import { PageHeader } from "@/components/page-header";
 import { invoiceColumns, paymentColumns, tripColumns } from "@/components/record-columns";
 import { SimpleTable } from "@/components/simple-table";
 import { StatusBadge } from "@/components/status-badge";
-import { useInvoice, useInvoices, useMaterials, useSettings } from "@/hooks/queries";
+import {
+  api,
+  useAction,
+  useFinanceTotals,
+  useInvoice,
+  useInvoicesPage,
+  useMasterOptions,
+  useMaterials,
+  useSettings,
+} from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
 import { formatINR, formatINRCompact } from "@/lib/format";
 import { InvoiceDocument } from "./invoice-document";
 
 export function InvoicesPage() {
-  const { data, isLoading, error } = useInvoices();
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useInvoicesPage(query);
+  const { data: totals } = useFinanceTotals();
+  const { data: options } = useMasterOptions();
+  const { can } = useAuth();
   if (error) return <ErrorState error={error} />;
-  const total = data?.reduce((s, i) => s + i.total, 0) ?? 0;
-  const balance = data?.reduce((s, i) => s + i.balance, 0) ?? 0;
-  const overdue = data?.filter((i) => i.overdueDays > 0) ?? [];
   return (
     <>
       <PageHeader
         title="Invoices"
         description="GST invoices created from confirmed deliveries. Quantities come from delivery slips, never typed."
         actions={
-          <Button asChild>
-            <Link to="/invoices/new">
-              <FilePlus2 className="size-4" /> Create from deliveries
-            </Link>
-          </Button>
+          can("record_payments") && (
+            <Button asChild>
+              <Link to="/invoices/new">
+                <FilePlus2 className="size-4" /> Create from deliveries
+              </Link>
+            </Button>
+          )
         }
       />
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
-          label="Invoiced (all time)"
-          value={formatINRCompact(total)}
+          label="Invoiced this month"
+          value={totals ? formatINRCompact(totals.invoicedMonth) : "—"}
           icon={ReceiptIndianRupee}
         />
         <KpiCard
           label="Balance to collect"
-          value={formatINRCompact(balance)}
+          value={totals ? formatINRCompact(totals.receivable) : "—"}
           icon={Wallet}
           tone="amber"
         />
         <KpiCard
           label="Overdue"
-          value={overdue.length}
-          hint={formatINRCompact(overdue.reduce((s, i) => s + i.balance, 0))}
+          value={totals ? formatINRCompact(totals.overdue) : "—"}
           icon={AlertTriangle}
           tone="red"
         />
         <KpiCard
           label="Flagged by checks"
-          value={data?.filter((i) => i.flags.length).length ?? "—"}
+          value={totals?.invoicesFlagged ?? "—"}
           icon={Scale}
           href="/reconciliation"
         />
       </div>
       <DataTable
-        data={data}
-        isLoading={isLoading}
+        data={data?.rows}
+        isLoading={isLoading || !query}
+        server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
         columns={invoiceColumns()}
         getRowId={(i) => i.id}
         rowHref={(i) => `/invoices/${i.id}`}
@@ -79,21 +95,24 @@ export function InvoicesPage() {
         filters={[
           {
             id: "status",
-            label: "Payment",
-            options: ["Unpaid", "Partial", "Paid"].map((s) => ({ value: s, label: s })),
+            label: "Status",
+            options: ["Unpaid", "Partial", "Paid", "Overdue", "Draft", "Cancelled"].map((s) => ({
+              value: s,
+              label: s,
+            })),
             value: (i) => i.paymentStatus,
           },
           {
             id: "customer",
             label: "Customers",
-            options: optionsFrom(data?.map((i) => i.customerName) ?? []),
-            value: (i) => i.customerName,
+            options: (options?.customers ?? []).map((c) => ({ value: c.id, label: c.name })),
+            value: (i) => i.customerId,
           },
           {
-            id: "gst",
-            label: "GST",
-            options: ["CGST+SGST", "IGST", "None"].map((s) => ({ value: s, label: s })),
-            value: (i) => i.gstMode,
+            id: "recon",
+            label: "Checks",
+            options: RECON_OPTIONS,
+            value: (i) => i.reconStatus,
           },
         ]}
         dateValue={(i) => i.date}
@@ -104,14 +123,38 @@ export function InvoicesPage() {
   );
 }
 
+const RECON_OPTIONS = [
+  "Matched",
+  "Mismatch",
+  "Disputed",
+  "Correction Requested",
+  "Difference Approved",
+  "Reconciled",
+].map((s) => ({ value: s, label: s }));
+
+/** Browser print → "Save as PDF"; the document title becomes the file name. */
+function printInvoice(number: string) {
+  const previous = document.title;
+  document.title = number;
+  window.print();
+  document.title = previous;
+}
+
 export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
   const { data, isLoading, error } = useInvoice(invoiceId);
   const { data: settings } = useSettings();
   const { data: materials } = useMaterials();
   const { can } = useAuth();
+  const [cancelling, setCancelling] = useState(false);
+  const issue = useAction(() => api.invoices.issueInvoice(invoiceId), "Invoice issued");
+  const cancel = useAction(
+    (reason: string) => api.invoices.cancelInvoice(invoiceId, reason),
+    "Invoice cancelled",
+  );
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <DetailSkeleton />;
   const { invoice: inv, payments, trips, customer } = data;
+  const live = inv.status !== "Cancelled";
   return (
     <>
       <PageHeader
@@ -119,7 +162,11 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
         crumbs={[{ label: inv.number }]}
         badge={
           <>
-            <StatusBadge status={inv.paymentStatus} />
+            {inv.status === "Draft" || inv.status === "Cancelled" ? (
+              <StatusBadge status={inv.status} />
+            ) : (
+              <StatusBadge status={inv.paymentStatus} />
+            )}
             {inv.flags.length > 0 && (
               <StatusBadge
                 status={`${inv.flags.length} flag${inv.flags.length > 1 ? "s" : ""}`}
@@ -134,14 +181,23 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
             <Button variant="outline" onClick={() => window.print()}>
               <Printer className="size-4" /> Print
             </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                toast.success("PDF export queued", { description: `${inv.number}.pdf (demo)` })
-              }
-            >
+            <Button variant="outline" onClick={() => printInvoice(inv.number)}>
               <Download className="size-4" /> PDF
             </Button>
+            {can("record_payments") && inv.status === "Draft" && (
+              <Button
+                variant="outline"
+                onClick={() => issue.mutate(undefined)}
+                disabled={issue.isPending}
+              >
+                <Send className="size-4" /> Issue
+              </Button>
+            )}
+            {can("record_payments") && live && payments.length === 0 && (
+              <Button variant="outline" onClick={() => setCancelling(true)}>
+                <XCircle className="size-4" /> Cancel invoice
+              </Button>
+            )}
             {can("verify_bills") && (
               <Button variant="outline" asChild>
                 <Link to="/reconciliation/$recordId" params={{ recordId: inv.id }}>
@@ -149,7 +205,7 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
                 </Link>
               </Button>
             )}
-            {inv.balance > 0 && (
+            {can("record_payments") && live && inv.status !== "Draft" && inv.balance > 0 && (
               <Button asChild>
                 <Link to="/payments" search={{ record: inv.id }}>
                   <CreditCard className="size-4" /> Record payment
@@ -158,6 +214,16 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
             )}
           </>
         }
+      />
+      <ConfirmDialog
+        open={cancelling}
+        onOpenChange={setCancelling}
+        title={`Cancel ${inv.number}?`}
+        description="The invoice stays on record as cancelled and its deliveries can be invoiced again."
+        confirmLabel="Cancel invoice"
+        destructive
+        requireReason
+        onConfirm={(reason) => cancel.mutateAsync(reason)}
       />
       {inv.flags.length > 0 && (
         <InfoNote tone="warning" className="mb-4">
@@ -176,6 +242,15 @@ export function InvoiceDetailPage({ invoiceId }: { invoiceId: string }) {
           gstMode={inv.gstMode}
           additionalCharges={inv.additionalCharges}
           notes={inv.notes}
+          placeOfSupply={inv.placeOfSupply ?? ""}
+          totals={{
+            subtotal: inv.subtotal,
+            extras: inv.additionalTotal,
+            cgst: inv.cgst ?? 0,
+            sgst: inv.sgst ?? 0,
+            igst: inv.igst ?? 0,
+            total: inv.total,
+          }}
           lines={inv.lines.map((l) => ({
             description: l.description.split(" · ")[0] ?? l.description,
             hsn: materials?.find((m) => m.id === l.materialId)?.hsn ?? "",

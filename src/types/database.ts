@@ -130,8 +130,10 @@ export type Database = {
       app_settings: {
         Row: {
           ai_daily_call_cap: number
+          allow_overpayment: boolean
           authoritative_weight: Database["public"]["Enums"]["weight_record_type"]
           auto_process_confidence_threshold: number
+          bill_amount_tolerance: number
           business_id: string
           business_profile: Json
           created_at: string
@@ -151,6 +153,7 @@ export type Database = {
           net_weight_tolerance: number
           next_invoice_number: number
           notification_preferences: Json
+          payment_allocation: string
           updated_at: string
           updated_by: string | null
           upload_link_doc_types: string[]
@@ -160,8 +163,10 @@ export type Database = {
         }
         Insert: {
           ai_daily_call_cap?: number
+          allow_overpayment?: boolean
           authoritative_weight?: Database["public"]["Enums"]["weight_record_type"]
           auto_process_confidence_threshold?: number
+          bill_amount_tolerance?: number
           business_id?: string
           business_profile?: Json
           created_at?: string
@@ -181,6 +186,7 @@ export type Database = {
           net_weight_tolerance?: number
           next_invoice_number?: number
           notification_preferences?: Json
+          payment_allocation?: string
           updated_at?: string
           updated_by?: string | null
           upload_link_doc_types?: string[]
@@ -190,8 +196,10 @@ export type Database = {
         }
         Update: {
           ai_daily_call_cap?: number
+          allow_overpayment?: boolean
           authoritative_weight?: Database["public"]["Enums"]["weight_record_type"]
           auto_process_confidence_threshold?: number
+          bill_amount_tolerance?: number
           business_id?: string
           business_profile?: Json
           created_at?: string
@@ -211,6 +219,7 @@ export type Database = {
           net_weight_tolerance?: number
           next_invoice_number?: number
           notification_preferences?: Json
+          payment_allocation?: string
           updated_at?: string
           updated_by?: string | null
           upload_link_doc_types?: string[]
@@ -391,7 +400,10 @@ export type Database = {
       customer_invoices: {
         Row: {
           additional_charges: number
+          additional_charges_detail: Json
           business_id: string
+          cancelled_reason: string | null
+          cgst_amount: number
           created_at: string
           created_by: string | null
           customer_id: string
@@ -399,11 +411,14 @@ export type Database = {
           due_date: string | null
           gst_mode: Database["public"]["Enums"]["gst_mode"]
           id: string
+          igst_amount: number
           invoice_date: string
           invoice_number: string
           notes: string | null
           order_id: string
+          place_of_supply: string | null
           recon_status: Database["public"]["Enums"]["recon_status"]
+          sgst_amount: number
           site_id: string | null
           status: Database["public"]["Enums"]["invoice_status"]
           subtotal: number
@@ -415,7 +430,10 @@ export type Database = {
         }
         Insert: {
           additional_charges?: number
+          additional_charges_detail?: Json
           business_id?: string
+          cancelled_reason?: string | null
+          cgst_amount?: number
           created_at?: string
           created_by?: string | null
           customer_id: string
@@ -423,11 +441,14 @@ export type Database = {
           due_date?: string | null
           gst_mode?: Database["public"]["Enums"]["gst_mode"]
           id?: string
+          igst_amount?: number
           invoice_date?: string
           invoice_number: string
           notes?: string | null
           order_id: string
+          place_of_supply?: string | null
           recon_status?: Database["public"]["Enums"]["recon_status"]
+          sgst_amount?: number
           site_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           subtotal?: number
@@ -439,7 +460,10 @@ export type Database = {
         }
         Update: {
           additional_charges?: number
+          additional_charges_detail?: Json
           business_id?: string
+          cancelled_reason?: string | null
+          cgst_amount?: number
           created_at?: string
           created_by?: string | null
           customer_id?: string
@@ -447,11 +471,14 @@ export type Database = {
           due_date?: string | null
           gst_mode?: Database["public"]["Enums"]["gst_mode"]
           id?: string
+          igst_amount?: number
           invoice_date?: string
           invoice_number?: string
           notes?: string | null
           order_id?: string
+          place_of_supply?: string | null
           recon_status?: Database["public"]["Enums"]["recon_status"]
+          sgst_amount?: number
           site_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           subtotal?: number
@@ -866,6 +893,13 @@ export type Database = {
             foreignKeyName: "delivery_records_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: true
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "delivery_records_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: true
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -1144,10 +1178,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "documents_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "documents_payment_id_fkey"
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "v_payment_list"
             referencedColumns: ["id"]
           },
           {
@@ -1189,6 +1237,13 @@ export type Database = {
             foreignKeyName: "documents_trip_hint_id_fkey"
             columns: ["trip_hint_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "documents_trip_hint_id_fkey"
+            columns: ["trip_hint_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -1212,6 +1267,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "truck_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "documents_trip_id_fkey"
@@ -1475,6 +1537,13 @@ export type Database = {
             foreignKeyName: "expenses_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -1506,6 +1575,7 @@ export type Database = {
           id: string
           invoice_id: string
           material_id: string
+          order_item_id: string | null
           quantity: number
           rate: number
           trip_id: string | null
@@ -1524,6 +1594,7 @@ export type Database = {
           id?: string
           invoice_id: string
           material_id: string
+          order_item_id?: string | null
           quantity: number
           rate: number
           trip_id?: string | null
@@ -1542,6 +1613,7 @@ export type Database = {
           id?: string
           invoice_id?: string
           material_id?: string
+          order_item_id?: string | null
           quantity?: number
           rate?: number
           trip_id?: string | null
@@ -1572,6 +1644,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "invoice_items_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false
@@ -1586,11 +1665,32 @@ export type Database = {
             referencedColumns: ["material_id"]
           },
           {
+            foreignKeyName: "invoice_items_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_progress"
+            referencedColumns: ["order_item_id"]
+          },
+          {
             foreignKeyName: "invoice_items_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
             referencedRelation: "truck_trips"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
           },
           {
             foreignKeyName: "invoice_items_trip_id_fkey"
@@ -1908,6 +2008,13 @@ export type Database = {
             foreignKeyName: "notifications_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "notifications_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -2129,6 +2236,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payments_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_list"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payments_provider_bill_id_fkey"
             columns: ["provider_bill_id"]
             isOneToOne: false
@@ -2344,6 +2458,13 @@ export type Database = {
             foreignKeyName: "provider_bill_items_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "provider_bill_items_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -2365,6 +2486,8 @@ export type Database = {
       }
       provider_bills: {
         Row: {
+          additional_charges: number
+          additional_charges_detail: Json
           bill_date: string
           bill_number: string
           business_id: string
@@ -2384,6 +2507,8 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          additional_charges?: number
+          additional_charges_detail?: Json
           bill_date: string
           bill_number: string
           business_id?: string
@@ -2403,6 +2528,8 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          additional_charges?: number
+          additional_charges_detail?: Json
           bill_date?: string
           bill_number?: string
           business_id?: string
@@ -2770,8 +2897,10 @@ export type Database = {
           billed_quantity: number | null
           billed_trips: number | null
           business_id: string
+          checked_at: string | null
           created_at: string
           created_by: string | null
+          detail: Json
           id: string
           invoice_id: string | null
           note: string | null
@@ -2797,8 +2926,10 @@ export type Database = {
           billed_quantity?: number | null
           billed_trips?: number | null
           business_id?: string
+          checked_at?: string | null
           created_at?: string
           created_by?: string | null
+          detail?: Json
           id?: string
           invoice_id?: string | null
           note?: string | null
@@ -2824,8 +2955,10 @@ export type Database = {
           billed_quantity?: number | null
           billed_trips?: number | null
           business_id?: string
+          checked_at?: string | null
           created_at?: string
           created_by?: string | null
+          detail?: Json
           id?: string
           invoice_id?: string | null
           note?: string | null
@@ -2856,6 +2989,13 @@ export type Database = {
             columns: ["invoice_id"]
             isOneToOne: false
             referencedRelation: "customer_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_records_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "v_invoice_list"
             referencedColumns: ["id"]
           },
           {
@@ -3060,6 +3200,8 @@ export type Database = {
           created_by: string | null
           id: string
           notes: string | null
+          quantity: number | null
+          rate: number | null
           trip_date: string | null
           trip_id: string | null
           updated_at: string
@@ -3075,6 +3217,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           notes?: string | null
+          quantity?: number | null
+          rate?: number | null
           trip_date?: string | null
           trip_id?: string | null
           updated_at?: string
@@ -3090,6 +3234,8 @@ export type Database = {
           created_by?: string | null
           id?: string
           notes?: string | null
+          quantity?: number | null
+          rate?: number | null
           trip_date?: string | null
           trip_id?: string | null
           updated_at?: string
@@ -3122,6 +3268,13 @@ export type Database = {
             foreignKeyName: "transporter_bill_trips_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "transporter_bill_trips_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -3143,8 +3296,11 @@ export type Database = {
       }
       transporter_bills: {
         Row: {
+          additional_charges: number
+          additional_charges_detail: Json
           bill_date: string
           bill_number: string
+          billed_rate: number | null
           business_id: string
           created_at: string
           created_by: string | null
@@ -3155,6 +3311,7 @@ export type Database = {
           notes: string | null
           period_from: string | null
           period_to: string | null
+          rate_basis: string | null
           recon_status: Database["public"]["Enums"]["recon_status"]
           subtotal: number
           tax_amount: number
@@ -3164,8 +3321,11 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          additional_charges?: number
+          additional_charges_detail?: Json
           bill_date: string
           bill_number: string
+          billed_rate?: number | null
           business_id?: string
           created_at?: string
           created_by?: string | null
@@ -3176,6 +3336,7 @@ export type Database = {
           notes?: string | null
           period_from?: string | null
           period_to?: string | null
+          rate_basis?: string | null
           recon_status?: Database["public"]["Enums"]["recon_status"]
           subtotal?: number
           tax_amount?: number
@@ -3185,8 +3346,11 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          additional_charges?: number
+          additional_charges_detail?: Json
           bill_date?: string
           bill_number?: string
+          billed_rate?: number | null
           business_id?: string
           created_at?: string
           created_by?: string | null
@@ -3197,6 +3361,7 @@ export type Database = {
           notes?: string | null
           period_from?: string | null
           period_to?: string | null
+          rate_basis?: string | null
           recon_status?: Database["public"]["Enums"]["recon_status"]
           subtotal?: number
           tax_amount?: number
@@ -3249,6 +3414,8 @@ export type Database = {
           is_active: boolean
           name: string
           phone: string | null
+          rate_basis: string
+          rate_per_mt: number | null
           rate_per_trip: number | null
           updated_at: string
           updated_by: string | null
@@ -3265,6 +3432,8 @@ export type Database = {
           is_active?: boolean
           name: string
           phone?: string | null
+          rate_basis?: string
+          rate_per_mt?: number | null
           rate_per_trip?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -3281,6 +3450,8 @@ export type Database = {
           is_active?: boolean
           name?: string
           phone?: string | null
+          rate_basis?: string
+          rate_per_mt?: number | null
           rate_per_trip?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -3583,6 +3754,13 @@ export type Database = {
             foreignKeyName: "upload_tokens_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "upload_tokens_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -3829,6 +4007,13 @@ export type Database = {
             foreignKeyName: "weight_records_trip_id_fkey"
             columns: ["trip_id"]
             isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "weight_records_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
             referencedRelation: "v_trip_list"
             referencedColumns: ["id"]
           },
@@ -3850,6 +4035,38 @@ export type Database = {
       }
     }
     Views: {
+      v_bill_list: {
+        Row: {
+          additional_charges: number | null
+          amount_difference: number | null
+          bill_date: string | null
+          bill_number: string | null
+          billed_quantity: number | null
+          business_id: string | null
+          created_at: string | null
+          document_id: string | null
+          due_date: string | null
+          id: string | null
+          kind: string | null
+          line_count: number | null
+          missing_trips: number | null
+          notes: string | null
+          paid_amount: number | null
+          party_id: string | null
+          party_name: string | null
+          recon_note: string | null
+          recon_reason: string | null
+          recon_status: Database["public"]["Enums"]["recon_status"] | null
+          recorded_amount: number | null
+          recorded_quantity: number | null
+          recorded_trips: number | null
+          subtotal: number | null
+          tax_amount: number | null
+          total_amount: number | null
+          unmatched_lines: number | null
+        }
+        Relationships: []
+      }
       v_customer_outstanding: {
         Row: {
           business_id: string | null
@@ -3900,6 +4117,256 @@ export type Database = {
           },
         ]
       }
+      v_expense_list: {
+        Row: {
+          amount: number | null
+          business_id: string | null
+          category: Database["public"]["Enums"]["expense_category"] | null
+          created_at: string | null
+          description: string | null
+          expense_date: string | null
+          id: string | null
+          mode: Database["public"]["Enums"]["payment_mode"] | null
+          order_code: string | null
+          order_id: string | null
+          paid_to: string | null
+          recorded_by: string | null
+          trip_code: string | null
+          trip_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_profit"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "expenses_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_progress"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "truck_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_economics"
+            referencedColumns: ["trip_id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "v_trip_weights"
+            referencedColumns: ["trip_id"]
+          },
+        ]
+      }
+      v_invoice_list: {
+        Row: {
+          additional_charges: number | null
+          balance: number | null
+          business_id: string | null
+          cgst_amount: number | null
+          created_at: string | null
+          customer_id: string | null
+          customer_name: string | null
+          due_date: string | null
+          gst_mode: Database["public"]["Enums"]["gst_mode"] | null
+          id: string | null
+          igst_amount: number | null
+          invoice_date: string | null
+          invoice_number: string | null
+          notes: string | null
+          order_code: string | null
+          order_id: string | null
+          overdue_days: number | null
+          paid_amount: number | null
+          payment_status: string | null
+          place_of_supply: string | null
+          quantity: number | null
+          recon_status: Database["public"]["Enums"]["recon_status"] | null
+          sgst_amount: number | null
+          site_id: string | null
+          site_name: string | null
+          status: Database["public"]["Enums"]["invoice_status"] | null
+          subtotal: number | null
+          tax_amount: number | null
+          total_amount: number | null
+          verification_flags: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_invoices_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_outstanding"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_stats"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_profit"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_progress"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "customer_invoices_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_landed_cost: {
+        Row: {
+          business_id: string | null
+          landed_per_unit: number | null
+          level: string | null
+          material_id: string | null
+          material_name: string | null
+          provider_id: string | null
+          provider_name: string | null
+          purchase_per_unit: number | null
+          quantity: number | null
+          selling_per_unit: number | null
+          transport_per_unit: number | null
+          trip_count: number | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "truck_trips_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_material_stats"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "material_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "v_provider_payable"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "v_provider_stats"
+            referencedColumns: ["provider_id"]
+          },
+        ]
+      }
       v_material_stats: {
         Row: {
           business_id: string | null
@@ -3931,6 +4398,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_monthly_profit: {
+        Row: {
+          business_id: string | null
+          estimated_profit: number | null
+          labour_cost: number | null
+          loading_unloading_cost: number | null
+          month: string | null
+          other_expenses: number | null
+          profit_status: string | null
+          purchase_cost: number | null
+          sales_value: number | null
+          transport_cost: number | null
+        }
+        Relationships: []
       }
       v_order_list: {
         Row: {
@@ -4002,6 +4484,7 @@ export type Database = {
           business_id: string | null
           customer_id: string | null
           customer_name: string | null
+          delivered_qty: number | null
           estimated_profit: number | null
           labour_cost: number | null
           loading_unloading_cost: number | null
@@ -4121,6 +4604,52 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_material_stats"
             referencedColumns: ["material_id"]
+          },
+        ]
+      }
+      v_party_outstanding: {
+        Row: {
+          business_id: string | null
+          current_amount: number | null
+          d30: number | null
+          d60: number | null
+          d90: number | null
+          outstanding: number | null
+          paid: number | null
+          party_id: string | null
+          party_name: string | null
+          party_type: string | null
+          total: number | null
+        }
+        Relationships: []
+      }
+      v_payment_list: {
+        Row: {
+          against_id: string | null
+          against_label: string | null
+          against_type: string | null
+          amount: number | null
+          business_id: string | null
+          created_at: string | null
+          direction: Database["public"]["Enums"]["payment_direction"] | null
+          id: string | null
+          mode: Database["public"]["Enums"]["payment_mode"] | null
+          notes: string | null
+          party_id: string | null
+          party_name: string | null
+          party_type: Database["public"]["Enums"]["party_type"] | null
+          payment_code: string | null
+          payment_date: string | null
+          recorded_by: string | null
+          reference: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4406,6 +4935,121 @@ export type Database = {
           },
         ]
       }
+      v_trip_economics: {
+        Row: {
+          billable_qty: number | null
+          business_id: string | null
+          delivered_net: number | null
+          economic_date: string | null
+          loading_net: number | null
+          material_id: string | null
+          order_id: string | null
+          provider_billed: boolean | null
+          provider_id: string | null
+          purchase_cost: number | null
+          sales_value: number | null
+          selling_rate: number | null
+          stock_location_id: string | null
+          transport_billed: boolean | null
+          transport_cost: number | null
+          transporter_id: string | null
+          trip_id: string | null
+          unit: Database["public"]["Enums"]["material_unit"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "truck_trips_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_material_stats"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "customer_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_list"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_profit"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_progress"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "material_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "v_provider_payable"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "v_provider_stats"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "truck_trips_stock_location_id_fkey"
+            columns: ["stock_location_id"]
+            isOneToOne: false
+            referencedRelation: "stock_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_transporter_id_fkey"
+            columns: ["transporter_id"]
+            isOneToOne: false
+            referencedRelation: "transporters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "truck_trips_transporter_id_fkey"
+            columns: ["transporter_id"]
+            isOneToOne: false
+            referencedRelation: "v_transporter_payable"
+            referencedColumns: ["transporter_id"]
+          },
+        ]
+      }
       v_trip_list: {
         Row: {
           business_id: string | null
@@ -4650,14 +5294,14 @@ export type Database = {
           },
           {
             foreignKeyName: "weight_records_document_id_fkey"
-            columns: ["loading_document_id"]
+            columns: ["delivery_document_id"]
             isOneToOne: false
             referencedRelation: "documents"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "weight_records_document_id_fkey"
-            columns: ["delivery_document_id"]
+            columns: ["loading_document_id"]
             isOneToOne: false
             referencedRelation: "documents"
             referencedColumns: ["id"]
@@ -4933,11 +5577,26 @@ export type Database = {
       }
     }
     Functions: {
+      adjust_stock: {
+        Args: {
+          p_date: string
+          p_location_id: string
+          p_material_id: string
+          p_quantity: number
+          p_reason: string
+        }
+        Returns: string
+      }
       ai_reserve_call: { Args: { p_business_id: string }; Returns: boolean }
       app_fail: { Args: { p_message: string }; Returns: undefined }
       apply_document_decision: {
         Args: { p_decision: Json; p_document_id: string }
         Returns: string
+      }
+      bill_number_key: { Args: { p: string }; Returns: string }
+      cancel_invoice: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: undefined
       }
       claim_document_jobs: {
         Args: { p_limit?: number }
@@ -4970,6 +5629,19 @@ export type Database = {
         }
         Returns: undefined
       }
+      create_bill: {
+        Args: { p_bill: Json; p_items: Json; p_kind: string }
+        Returns: Json
+      }
+      create_bill_from_document: {
+        Args: {
+          p_bill: Json
+          p_document_id: string
+          p_items: Json
+          p_kind: string
+        }
+        Returns: Json
+      }
       create_customer: {
         Args: { p_customer: Json; p_site?: Json }
         Returns: string
@@ -4987,6 +5659,16 @@ export type Database = {
           p_trip_hint_id?: string
           p_uploaded_by?: string
           p_uploaded_by_label?: string
+        }
+        Returns: Json
+      }
+      create_invoice: {
+        Args: {
+          p_charges?: Json
+          p_invoice: Json
+          p_issue?: boolean
+          p_lines?: Json
+          p_trip_ids?: string[]
         }
         Returns: Json
       }
@@ -5017,6 +5699,15 @@ export type Database = {
         Returns: string
       }
       current_business_id: { Args: never; Returns: string }
+      decide_reconciliation: {
+        Args: {
+          p_action: string
+          p_bill_id: string
+          p_bill_type: Database["public"]["Enums"]["bill_type"]
+          p_note: string
+        }
+        Returns: Database["public"]["Enums"]["recon_status"]
+      }
       defer_document_job: {
         Args: { p_job_id: string; p_note: string; p_until: string }
         Returns: undefined
@@ -5088,6 +5779,7 @@ export type Database = {
         Returns: Json
       }
       enqueue_document: { Args: { p_document_id: string }; Returns: string }
+      finance_totals: { Args: never; Returns: Json }
       finish_document_job: {
         Args: { p_error?: string; p_job_id: string }
         Returns: Database["public"]["Enums"]["document_job_status"]
@@ -5096,12 +5788,24 @@ export type Database = {
         Args: { p_prefix: string; p_seq: unknown; p_width: number }
         Returns: string
       }
+      gst_state_code: { Args: { p: string }; Returns: string }
       has_permission: {
         Args: { p_key: Database["public"]["Enums"]["permission_key"] }
         Returns: boolean
       }
+      insert_bill: {
+        Args: {
+          p_bill: Json
+          p_business: string
+          p_document_id: string
+          p_items: Json
+          p_kind: string
+        }
+        Returns: string
+      }
       is_active_user: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
+      issue_invoice: { Args: { p_invoice_id: string }; Returns: undefined }
       kick_document_worker: { Args: never; Returns: undefined }
       kick_notify_digest: { Args: never; Returns: undefined }
       mark_document_duplicate: {
@@ -5109,6 +5813,7 @@ export type Database = {
         Returns: undefined
       }
       mark_notifications_read: { Args: { p_ids: string[] }; Returns: undefined }
+      plate_key: { Args: { p: string }; Returns: string }
       push_notification: {
         Args: {
           p_business_id: string
@@ -5133,6 +5838,18 @@ export type Database = {
         Args: { p_invoice_id: string }
         Returns: undefined
       }
+      reconcile_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: Database["public"]["Enums"]["recon_status"]
+      }
+      reconcile_provider_bill: {
+        Args: { p_bill_id: string }
+        Returns: Database["public"]["Enums"]["recon_status"]
+      }
+      reconcile_transporter_bill: {
+        Args: { p_bill_id: string }
+        Returns: Database["public"]["Enums"]["recon_status"]
+      }
       record_document_extraction: {
         Args: { p_document_id: string; p_result: Json }
         Returns: undefined
@@ -5146,6 +5863,7 @@ export type Database = {
         }
         Returns: string
       }
+      record_payment: { Args: { p: Json }; Returns: Json }
       record_trip_investigation: {
         Args: {
           p_notes: string
@@ -5176,6 +5894,10 @@ export type Database = {
         Args: { p_document_id: string }
         Returns: undefined
       }
+      require_any_permission: {
+        Args: { p_keys: Database["public"]["Enums"]["permission_key"][] }
+        Returns: undefined
+      }
       require_permission: {
         Args: { p_key: Database["public"]["Enums"]["permission_key"] }
         Returns: undefined
@@ -5188,6 +5910,15 @@ export type Database = {
           p_trip_id: string
         }
         Returns: undefined
+      }
+      review_create_bill_from_document: {
+        Args: {
+          p_bill: Json
+          p_document_id: string
+          p_items: Json
+          p_kind: string
+        }
+        Returns: Json
       }
       review_create_trip_from_document: {
         Args: { p_document_id: string; p_reason: string; p_trip: Json }
@@ -5204,6 +5935,23 @@ export type Database = {
         Returns: undefined
       }
       set_material_tolerances: { Args: { p_values: Json }; Returns: number }
+      store_reconciliation: {
+        Args: {
+          p_bill: string
+          p_billed_amount: number
+          p_billed_qty: number
+          p_billed_trips: number
+          p_business: string
+          p_detail: Json
+          p_ok: boolean
+          p_reason: string
+          p_recorded_amount: number
+          p_recorded_qty: number
+          p_recorded_trips: number
+          p_type: Database["public"]["Enums"]["bill_type"]
+        }
+        Returns: Database["public"]["Enums"]["recon_status"]
+      }
       tolerance_status_for: {
         Args: { p_difference: number; p_tolerance: number }
         Returns: Database["public"]["Enums"]["tolerance_status"]

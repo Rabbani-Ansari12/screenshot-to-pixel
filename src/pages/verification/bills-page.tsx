@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, CreditCard, FileText, IndianRupee, Scale } from "lucide-react";
+import { AlertTriangle, CreditCard, FileText, IndianRupee, RefreshCw, Scale } from "lucide-react";
 import type { BillKind } from "@/types";
 import { Button } from "@/components/ui/button";
-import { DataTable, optionsFrom } from "@/components/data-table";
+import { DataTable } from "@/components/data-table";
 import {
   DetailList,
   DetailSkeleton,
@@ -16,15 +17,36 @@ import { PageHeader } from "@/components/page-header";
 import { billColumns, paymentColumns } from "@/components/record-columns";
 import { SimpleTable } from "@/components/simple-table";
 import { StatusBadge } from "@/components/status-badge";
-import { useBill, useBills } from "@/hooks/queries";
+import {
+  api,
+  useAction,
+  useBill,
+  useBillsPage,
+  useFinanceTotals,
+  useMasterOptions,
+} from "@/hooks/queries";
+import type { TableQuery } from "@/services/supabase/table-query";
 import { useAuth } from "@/lib/auth";
 import { formatDate, formatINR, formatINRCompact, formatNumber } from "@/lib/format";
 
+const RECON = [
+  "Unreconciled",
+  "Matched",
+  "Mismatch",
+  "Disputed",
+  "Correction Requested",
+  "Difference Approved",
+  "Reconciled",
+];
+
 export function BillsPage({ kind }: { kind: BillKind }) {
-  const { data, isLoading, error } = useBills(kind);
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useBillsPage(kind, query);
+  const { data: totals } = useFinanceTotals();
+  const { data: options } = useMasterOptions();
   if (error) return <ErrorState error={error} />;
-  const outstanding = data?.reduce((s, b) => s + b.outstanding, 0) ?? 0;
-  const overdue = data?.filter((b) => b.overdueDays > 0) ?? [];
+  const outstanding = kind === "Provider" ? totals?.payableProvider : totals?.payableTransporter;
+  const parties = kind === "Provider" ? options?.providers : options?.transporters;
   return (
     <>
       <PageHeader
@@ -45,30 +67,30 @@ export function BillsPage({ kind }: { kind: BillKind }) {
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           label="Outstanding"
-          value={formatINRCompact(outstanding)}
+          value={outstanding === undefined ? "—" : formatINRCompact(outstanding)}
           icon={IndianRupee}
           tone="amber"
         />
         <KpiCard
-          label="Overdue bills"
-          value={overdue.length}
-          hint={formatINRCompact(overdue.reduce((s, b) => s + b.outstanding, 0))}
+          label="Paid out this month"
+          value={totals ? formatINRCompact(totals.paidMonth) : "—"}
+          hint="Providers and transporters"
           icon={AlertTriangle}
           tone="red"
         />
         <KpiCard
-          label="Need reconciliation"
-          value={
-            data?.filter((b) => ["Mismatch", "Unreconciled", "Matched"].includes(b.reconStatus))
-              .length ?? "—"
-          }
+          label="Need attention"
+          value={totals?.billsNeedingAttention ?? "—"}
+          hint="All bills"
           icon={Scale}
+          href="/reconciliation"
         />
-        <KpiCard label="Bills this year" value={data?.length ?? "—"} icon={FileText} tone="blue" />
+        <KpiCard label="Bills shown" value={data?.total ?? "—"} icon={FileText} tone="blue" />
       </div>
       <DataTable
-        data={data}
-        isLoading={isLoading}
+        data={data?.rows}
+        isLoading={isLoading || !query}
+        server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
         columns={billColumns()}
         getRowId={(b) => b.id}
         rowHref={(b) => `/bills/${b.id}`}
@@ -78,20 +100,14 @@ export function BillsPage({ kind }: { kind: BillKind }) {
           {
             id: "party",
             label: kind === "Provider" ? "Providers" : "Transporters",
-            options: optionsFrom(data?.map((b) => b.partyName) ?? []),
-            value: (b) => b.partyName,
+            options: (parties ?? []).map((p) => ({ value: p.id, label: p.name })),
+            value: (b) => b.partyId,
           },
           {
             id: "recon",
             label: "Reconciliation",
-            options: optionsFrom(data?.map((b) => b.reconStatus) ?? []),
+            options: RECON.map((r) => ({ value: r, label: r })),
             value: (b) => b.reconStatus,
-          },
-          {
-            id: "payment",
-            label: "Payment",
-            options: ["Unpaid", "Partial", "Paid"].map((s) => ({ value: s, label: s })),
-            value: (b) => b.paymentStatus,
           },
         ]}
         dateValue={(b) => b.date}
@@ -105,6 +121,10 @@ export function BillsPage({ kind }: { kind: BillKind }) {
 export function BillDetailPage({ billId }: { billId: string }) {
   const { data, isLoading, error } = useBill(billId);
   const { can } = useAuth();
+  const recheck = useAction(
+    () => api.bills.recheckBill(billId),
+    (b) => `${b.billNo} checked again: ${b.reconStatus}`,
+  );
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <DetailSkeleton />;
   const { bill, payments, document } = data;
@@ -123,6 +143,15 @@ export function BillDetailPage({ billId }: { billId: string }) {
         description={`${bill.partyName} · ${bill.kind} bill · ${formatDate(bill.date)}`}
         actions={
           <>
+            {can("verify_bills") && (
+              <Button
+                variant="outline"
+                onClick={() => recheck.mutate(undefined)}
+                disabled={recheck.isPending}
+              >
+                <RefreshCw className="size-4" /> Check again
+              </Button>
+            )}
             {can("verify_bills") && (
               <Button asChild variant="outline">
                 <Link to="/reconciliation/$recordId" params={{ recordId: bill.id }}>
@@ -176,8 +205,8 @@ export function BillDetailPage({ billId }: { billId: string }) {
                 label: "Quantity billed",
                 value: `${formatNumber(bill.billedQuantity, 2)} ${unit}`,
               },
-              { label: "Subtotal", value: formatINR(bill.billedSubtotal) },
-              { label: `GST ${bill.taxRate}%`, value: formatINR(bill.taxAmount) },
+              { label: "Subtotal + charges", value: formatINR(bill.billedSubtotal) },
+              { label: `Tax (${bill.taxRate}%)`, value: formatINR(bill.taxAmount) },
               { label: "Total", value: <span className="font-bold">{formatINR(bill.total)}</span> },
               { label: "Paid", value: formatINR(bill.paid) },
               {
@@ -213,9 +242,7 @@ export function BillDetailPage({ billId }: { billId: string }) {
               </div>
             </Link>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              Bill received before document automation (Oct 2026); entered manually.
-            </p>
+            <p className="text-sm text-muted-foreground">Entered manually; no document attached.</p>
           )}
         </SectionCard>
       </div>

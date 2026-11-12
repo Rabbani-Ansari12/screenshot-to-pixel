@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { setSupabaseClient } from "@/lib/supabase";
 import { createFakeSupabase } from "./fake-supabase";
-import { EMPLOYEES, ID, ORDER_CODE, TRIP_CODE, fixtureTables } from "./fixtures";
+import { EMPLOYEES, FINANCE_TOTALS, ID, ORDER_CODE, TRIP_CODE, fixtureTables } from "./fixtures";
 import { AppShell } from "@/components/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -87,6 +87,7 @@ function signInAs(userId: string | null) {
   const fake = createFakeSupabase({
     tables: fixtureTables(),
     userId,
+    rpc: { finance_totals: () => FINANCE_TOTALS },
     functions: {
       "admin-manage-employee": (body) =>
         body["action"] === "list" ? { employees: EMPLOYEES } : {},
@@ -128,24 +129,24 @@ const PAGES: [string, RegExp, () => ReactNode][] = [
   ["/stock", /Stock Ledger/, () => <StockPage />],
   ["/reconciliation", /Bill Reconciliation/, () => <ReconciliationPage />],
   [
-    "/reconciliation/PB-2026-112",
+    `/reconciliation/${ID.providerBill}`,
     /Line-by-line matching/,
-    () => <ReconcileDetailPage recordId="PB-2026-112" />,
+    () => <ReconcileDetailPage recordId={ID.providerBill} />,
   ],
   ["/bills/provider", /Provider Bills/, () => <BillsPage kind="Provider" />],
   ["/bills/transporter", /Transporter Bills/, () => <BillsPage kind="Transporter" />],
-  ["/bills/TB-2026-041", /Bill lines/, () => <BillDetailPage billId="TB-2026-041" />],
+  [
+    `/bills/${ID.transporterBill}`,
+    /Bill lines/,
+    () => <BillDetailPage billId={ID.transporterBill} />,
+  ],
   ["/invoices", /Create from deliveries/, () => <InvoicesPage />],
   ["/invoices/new", /Create invoice from deliveries/, () => <InvoiceCreatePage />],
+  [`/invoices/${ID.invoice}`, /Payment status/, () => <InvoiceDetailPage invoiceId={ID.invoice} />],
   [
-    "/invoices/INV-2026-0301",
-    /Payment status/,
-    () => <InvoiceDetailPage invoiceId="INV-2026-0301" />,
-  ],
-  [
-    "/reconciliation/INV-2026-0301",
+    `/reconciliation/${ID.invoice}`,
     /Verification checks/,
-    () => <ReconcileDetailPage recordId="INV-2026-0301" />,
+    () => <ReconcileDetailPage recordId={ID.invoice} />,
   ],
   ["/payments", /Outstanding summary/, () => <PaymentsPage />],
   ["/expenses", /By category/, () => <ExpensesPage />],

@@ -91,11 +91,33 @@ export const useStock = (yardId: string) =>
   useQuery(q(["stock", yardId], () => stock.getStock(yardId)));
 export const useBills = (kind?: "Provider" | "Transporter") =>
   useQuery(q(["bills", kind ?? "all"], () => bills.listBills(kind)));
+export const useBillsPage = (kind: "Provider" | "Transporter" | null, query: TableQuery | null) =>
+  useQuery({
+    ...q(
+      ["bills", "page", kind ?? "all", query],
+      () => bills.listBillsPage(kind, query as TableQuery),
+      Boolean(query),
+    ),
+    placeholderData: keepPreviousData,
+  });
+/** Receivable / payable / month totals across every row the user may see (not one page). */
+export const useFinanceTotals = () => useQuery(q(["bills", "totals"], bills.getFinanceTotals));
+export const useReconTarget = (id: string) =>
+  useQuery(q(["bills", "target", id], () => bills.reconTargetKind(id), Boolean(id)));
 export const useBill = (id: string) =>
   useQuery(q(["bills", "detail", id], () => bills.getBill(id)));
 export const useInvoiceVerification = (id: string) =>
   useQuery(q(["invoices", id, "verify"], () => bills.getInvoiceVerification(id)));
-export const useInvoices = () => useQuery(q(["invoices"], invoices.listInvoices));
+export const useInvoices = () => useQuery(q(["invoices"], () => invoices.listInvoices()));
+export const useInvoicesPage = (query: TableQuery | null) =>
+  useQuery({
+    ...q(
+      ["invoices", "page", query],
+      () => invoices.listInvoicesPage(query as TableQuery),
+      Boolean(query),
+    ),
+    placeholderData: keepPreviousData,
+  });
 export const useInvoice = (id: string) =>
   useQuery(q(["invoices", id], () => invoices.getInvoice(id)));
 export const useInvoiceableTrips = (orderId: string) =>
@@ -106,7 +128,16 @@ export const useInvoiceableTrips = (orderId: string) =>
       Boolean(orderId),
     ),
   );
-export const usePayments = () => useQuery(q(["payments"], payments.listPayments));
+export const usePayments = () => useQuery(q(["payments"], () => payments.listPayments()));
+export const usePaymentsPage = (query: TableQuery | null) =>
+  useQuery({
+    ...q(
+      ["payments", "page", query],
+      () => payments.listPaymentsPage(query as TableQuery),
+      Boolean(query),
+    ),
+    placeholderData: keepPreviousData,
+  });
 export const useOutstanding = () =>
   useQuery(q(["payments", "outstanding"], payments.getOutstanding));
 export const useOpenDocuments = (
@@ -120,7 +151,20 @@ export const useOpenDocuments = (
       Boolean(partyId),
     ),
   );
-export const useExpenses = () => useQuery(q(["expenses"], payments.listExpenses));
+export const usePaymentTarget = (id: string) =>
+  useQuery(q(["payments", "target", id], () => payments.paymentTarget(id), Boolean(id)));
+export const useExpenses = () => useQuery(q(["expenses"], () => payments.listExpenses()));
+export const useExpensesPage = (query: TableQuery | null) =>
+  useQuery({
+    ...q(
+      ["expenses", "page", query],
+      () => payments.listExpensesPage(query as TableQuery),
+      Boolean(query),
+    ),
+    placeholderData: keepPreviousData,
+  });
+export const useExpenseCategoryTotals = () =>
+  useQuery(q(["expenses", "categories"], payments.expenseCategoryTotals));
 export const useOrderProfits = () => useQuery(q(["profit", "orders"], profit.getOrderProfits));
 export const useMonthlyProfits = () => useQuery(q(["profit", "monthly"], profit.getMonthlyProfits));
 export const useLandedCosts = () => useQuery(q(["profit", "landed"], profit.getLandedCosts));
@@ -187,6 +231,7 @@ export function useAction<TArgs, TResult>(
 export const api = {
   admin,
   links,
+  stock,
   bills,
   documents,
   invoices,

@@ -17,7 +17,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DocumentThumbnail } from "@/components/document-viewer";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { api, useAction, useBill, useInvoiceVerification } from "@/hooks/queries";
+import { api, useAction, useBill, useInvoiceVerification, useReconTarget } from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
 import { formatDate, formatINR, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -485,7 +485,10 @@ function InvoiceVerify({ invoiceId }: { invoiceId: string }) {
 }
 
 export function ReconcileDetailPage({ recordId }: { recordId: string }) {
-  return recordId.startsWith("INV-") ? (
+  const { data: kind, isLoading, error } = useReconTarget(recordId);
+  if (error) return <ErrorState error={error} />;
+  if (isLoading || !kind) return <DetailSkeleton />;
+  return kind === "invoice" ? (
     <InvoiceVerify invoiceId={recordId} />
   ) : (
     <BillReconcile billId={recordId} />

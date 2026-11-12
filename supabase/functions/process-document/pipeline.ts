@@ -1,6 +1,23 @@
 // One document through the pipeline: classify → extract → normalise → validate → match → decide.
 // All I/O is injected (Deps) so the whole flow is tested with fixtures and a mocked model.
-import type { AiClient, AiFile, DocType, Extraction, Usage } from "../_shared/doc-types.ts";
+import {
+  billKindFor,
+  decideBill,
+  normalizeBill,
+  resolveParty,
+  validateBill,
+  type BillKind,
+  type MaterialRef,
+  type Party,
+} from "../_shared/bills.ts";
+import type {
+  AiClient,
+  AiFile,
+  DocType,
+  Extraction,
+  RawFields,
+  Usage,
+} from "../_shared/doc-types.ts";
 import { DOC_TYPES } from "../_shared/doc-types.ts";
 import { extractorFor } from "../_shared/extractors.ts";
 import {
@@ -29,7 +46,14 @@ export type ApplyDecision =
   | { action: "auto_record"; trip_id: string; record_type: "loading" | "delivery"; detail: unknown }
   | { action: "needs_review"; review_reason: string; detail: unknown }
   | { action: "duplicate"; duplicate_of: string; detail: unknown }
-  | { action: "extracted_only"; detail: unknown };
+  | { action: "extracted_only"; detail: unknown }
+  | {
+      action: "record_bill";
+      kind: BillKind;
+      bill: Record<string, unknown>;
+      items: Record<string, unknown>[];
+      detail: unknown;
+    };
 
 export interface Deps {
   ai: AiClient;
@@ -55,6 +79,9 @@ export interface Deps {
     slip: string,
     vehicle: string,
   ): Promise<string | null>;
+  /** Providers or transporters of the business (for matching the name / GSTIN on a bill). */
+  billParties(businessId: string, kind: BillKind): Promise<Party[]>;
+  materials(businessId: string): Promise<MaterialRef[]>;
   recordExtraction(documentId: string, payload: Record<string, unknown>): Promise<void>;
   applyDecision(documentId: string, decision: ApplyDecision): Promise<string>;
   log(event: string, data: Record<string, unknown>): void;
@@ -120,7 +147,25 @@ export async function processDocument(deps: Deps, documentId: string): Promise<O
   if (!(await deps.reserveCall(doc.business_id))) throw new CapReachedError();
   const ext = await deps.ai.extract(file, docType);
   usage = addUsage(usage, ext.usage);
-  const extraction: Extraction = normalizeExtraction(docType, cls.result.confidence, ext.result);
+
+  if (extractor.kind !== "weights") {
+    return processBill(deps, {
+      documentId,
+      businessId: doc.business_id,
+      docType,
+      docTypeConfidence: cls.result.confidence,
+      raw: { classify: cls.raw, extract: ext.raw, extractor: extractor.name },
+      result: ext.result,
+      usage,
+      confidenceThreshold: settings.confidenceThreshold,
+    });
+  }
+
+  const extraction: Extraction = normalizeExtraction(
+    docType,
+    cls.result.confidence,
+    ext.result as RawFields,
+  );
   const validation = validateWeightExtraction(extraction, settings.netTolerance);
   const fieldConfidences = Object.fromEntries(
     Object.entries(extraction.fields).map(([k, f]) => [k, f.confidence]),
@@ -205,4 +250,64 @@ export async function processDocument(deps: Deps, documentId: string): Promise<O
     detail,
   });
   return { status, docType, reason: decision.reason };
+}
+
+/**
+ * Bills: normalise → validate → find the provider / transporter → record or review.
+ * Duplicate detection (same party + bill number + amount) and reconciliation run in the
+ * database (create_bill_from_document). The AI never approves a difference or pays.
+ */
+async function processBill(
+  deps: Deps,
+  input: {
+    documentId: string;
+    businessId: string;
+    docType: DocType;
+    docTypeConfidence: number;
+    raw: Record<string, unknown>;
+    result: Record<string, unknown>;
+    usage: Usage;
+    confidenceThreshold: number;
+  },
+): Promise<Outcome> {
+  const kind = billKindFor(input.docType)!;
+  const extraction = normalizeBill(input.docType, input.docTypeConfidence, input.result);
+  const validation = validateBill(extraction);
+  await deps.recordExtraction(input.documentId, {
+    model: deps.ai.model,
+    raw_response: input.raw,
+    extracted: extraction,
+    field_confidences: Object.fromEntries(
+      Object.entries(extraction.fields).map(([k, f]) => [k, f.confidence]),
+    ),
+    overall_confidence: validation.overallConfidence,
+    usage: { calls: 2, ...input.usage },
+  });
+  const [parties, materials] = await Promise.all([
+    deps.billParties(input.businessId, kind),
+    kind === "provider" ? deps.materials(input.businessId) : Promise.resolve([]),
+  ]);
+  const nameKey = kind === "provider" ? "provider_name" : "transporter_name";
+  const gstinKey = kind === "provider" ? "provider_gstin" : "transporter_gstin";
+  const party = resolveParty(
+    (extraction.fields[nameKey]?.value as string | null) ?? null,
+    (extraction.fields[gstinKey]?.value as string | null) ?? null,
+    parties,
+  );
+  const decision = decideBill({
+    extraction,
+    validation,
+    party,
+    materials,
+    confidenceThreshold: input.confidenceThreshold,
+  });
+  deps.log("decided", {
+    documentId: input.documentId,
+    action: decision.action,
+    ...(decision.action === "needs_review" ? { reason: decision.review_reason } : { kind }),
+  });
+  const status = await deps.applyDecision(input.documentId, decision);
+  return decision.action === "needs_review"
+    ? { status, docType: input.docType, reason: decision.review_reason }
+    : { status, docType: input.docType };
 }

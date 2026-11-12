@@ -12,6 +12,16 @@ export interface InvoiceDocLine {
   trips: number;
 }
 
+/** Totals as stored by the database for an issued invoice (preview computes its own). */
+export interface InvoiceDocTotals {
+  subtotal: number;
+  extras: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  total: number;
+}
+
 /** Printable tax invoice. Used for the live preview while creating, and on the invoice page. */
 export function InvoiceDocument({
   settings,
@@ -27,6 +37,8 @@ export function InvoiceDocument({
   notes,
   className,
   draft,
+  totals,
+  placeOfSupply,
 }: {
   settings: AppSettings | undefined;
   number: string;
@@ -41,9 +53,11 @@ export function InvoiceDocument({
   notes?: string;
   className?: string;
   draft?: boolean;
+  totals?: InvoiceDocTotals;
+  placeOfSupply?: string;
 }) {
-  const subtotal = lines.reduce((s, l) => s + l.quantity * l.rate, 0);
-  const extras = additionalCharges.reduce((s, c) => s + c.amount, 0);
+  const subtotal = totals?.subtotal ?? lines.reduce((s, l) => s + l.quantity * l.rate, 0);
+  const extras = totals?.extras ?? additionalCharges.reduce((s, c) => s + c.amount, 0);
   const taxByRate = new Map<number, number>();
   if (gstMode !== "None")
     lines.forEach((l) =>
@@ -53,7 +67,17 @@ export function InvoiceDocument({
       ),
     );
   const tax = [...taxByRate.values()].reduce((s, v) => s + v, 0);
-  const total = Math.round(subtotal + extras + tax);
+  const total = totals?.total ?? Math.round((subtotal + extras + tax) * 100) / 100;
+  // One rate: show the stored split; several rates: per-rate split of the preview maths.
+  const stored =
+    totals && taxByRate.size <= 1
+      ? {
+          rate: [...taxByRate.keys()][0] ?? 0,
+          cgst: totals.cgst,
+          sgst: totals.sgst,
+          igst: totals.igst,
+        }
+      : null;
   return (
     <article
       className={cn(
@@ -100,6 +124,9 @@ export function InvoiceDocument({
           <p className="text-xs font-semibold uppercase text-stone-500">Ship to / order</p>
           <p className="font-semibold text-stone-900">{siteName || "—"}</p>
           <p className="text-xs text-stone-600">Order {orderRef || "—"}</p>
+          {placeOfSupply && (
+            <p className="text-xs text-stone-600">Place of supply: state code {placeOfSupply}</p>
+          )}
         </div>
       </section>
       <div className="overflow-x-auto">
@@ -157,7 +184,9 @@ export function InvoiceDocument({
       <section className="mt-4 flex flex-col justify-between gap-6 sm:flex-row">
         <div className="max-w-sm text-xs text-stone-500">
           <p className="font-medium text-stone-700">{rupeesInWords(total)}</p>
-          <p className="mt-3">Bank: HDFC Bank, Hadapsar · A/c 50200012345678 · IFSC HDFC0001234</p>
+          {settings?.business.bankDetails && (
+            <p className="mt-3">Bank: {settings.business.bankDetails}</p>
+          )}
           {notes && <p className="mt-2">{notes}</p>}
         </div>
         <dl className="w-full space-y-1 sm:w-64">
@@ -171,33 +200,52 @@ export function InvoiceDocument({
               <dd className="tabular-nums">{formatINR(extras)}</dd>
             </div>
           )}
-          {[...taxByRate.entries()].map(([rate, amount]) =>
-            gstMode === "CGST+SGST" ? (
-              <div key={rate}>
-                <div className="flex justify-between">
-                  <dt className="text-stone-500">CGST {rate / 2}%</dt>
-                  <dd className="tabular-nums">{formatINR(amount / 2, { paise: true })}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-stone-500">SGST {rate / 2}%</dt>
-                  <dd className="tabular-nums">{formatINR(amount / 2, { paise: true })}</dd>
-                </div>
+          {stored && gstMode === "CGST+SGST" && (
+            <>
+              <div className="flex justify-between">
+                <dt className="text-stone-500">CGST {stored.rate / 2}%</dt>
+                <dd className="tabular-nums">{formatINR(stored.cgst, { paise: true })}</dd>
               </div>
-            ) : (
-              <div key={rate} className="flex justify-between">
-                <dt className="text-stone-500">IGST {rate}%</dt>
-                <dd className="tabular-nums">{formatINR(amount, { paise: true })}</dd>
+              <div className="flex justify-between">
+                <dt className="text-stone-500">SGST {stored.rate / 2}%</dt>
+                <dd className="tabular-nums">{formatINR(stored.sgst, { paise: true })}</dd>
               </div>
-            ),
+            </>
           )}
+          {stored && gstMode === "IGST" && (
+            <div className="flex justify-between">
+              <dt className="text-stone-500">IGST {stored.rate}%</dt>
+              <dd className="tabular-nums">{formatINR(stored.igst, { paise: true })}</dd>
+            </div>
+          )}
+          {!stored &&
+            [...taxByRate.entries()].map(([rate, amount]) =>
+              gstMode === "CGST+SGST" ? (
+                <div key={rate}>
+                  <div className="flex justify-between">
+                    <dt className="text-stone-500">CGST {rate / 2}%</dt>
+                    <dd className="tabular-nums">{formatINR(amount / 2, { paise: true })}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-stone-500">SGST {rate / 2}%</dt>
+                    <dd className="tabular-nums">{formatINR(amount / 2, { paise: true })}</dd>
+                  </div>
+                </div>
+              ) : (
+                <div key={rate} className="flex justify-between">
+                  <dt className="text-stone-500">IGST {rate}%</dt>
+                  <dd className="tabular-nums">{formatINR(amount, { paise: true })}</dd>
+                </div>
+              ),
+            )}
           <div className="flex justify-between border-t border-stone-300 pt-2 text-base font-bold text-stone-900">
             <dt>Total</dt>
-            <dd className="tabular-nums">{formatINR(total)}</dd>
+            <dd className="tabular-nums">{formatINR(total, { paise: true })}</dd>
           </div>
         </dl>
       </section>
       <footer className="mt-8 flex justify-between border-t border-stone-200 pt-4 text-xs text-stone-500">
-        <span>Subject to Pune jurisdiction. E. & O.E.</span>
+        <span>E. & O.E.</span>
         <span>For {settings?.business.name ?? "Meridian Supply"} · Authorised signatory</span>
       </footer>
     </article>

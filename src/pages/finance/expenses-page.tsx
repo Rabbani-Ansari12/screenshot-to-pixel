@@ -33,12 +33,22 @@ import {
 } from "@/components/ui/select";
 import { ChartBox, ChartTooltip, axisProps, gridProps, series } from "@/components/charts";
 import { ErrorState, KpiCard, SectionCard } from "@/components/common";
-import { DataTable, optionsFrom, type Column } from "@/components/data-table";
+import { DataTable, type Column } from "@/components/data-table";
 import { EntityPicker } from "@/components/entity-picker";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
-import { api, useAction, useExpenses, useMasterOptions, useTrips } from "@/hooks/queries";
-import { DEMO_TODAY, formatDate, formatINR, formatINRCompact } from "@/lib/format";
+import {
+  api,
+  useAction,
+  useExpenseCategoryTotals,
+  useExpensesPage,
+  useFinanceTotals,
+  useMasterOptions,
+  useTrips,
+} from "@/hooks/queries";
+import { useAuth } from "@/lib/auth";
+import { formatDate, formatINR, formatINRCompact, todayIST } from "@/lib/format";
+import type { TableQuery } from "@/services/supabase/table-query";
 
 const CATEGORIES: ExpenseCategory[] = [
   "Labour",
@@ -73,7 +83,7 @@ function ExpenseDialog({
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      date: DEMO_TODAY,
+      date: todayIST(),
       category: "Loading",
       amount: Number.NaN,
       description: "",
@@ -285,21 +295,21 @@ function ExpenseDialog({
 }
 
 export function ExpensesPage() {
-  const { data, isLoading, error } = useExpenses();
+  const [query, setQuery] = useState<TableQuery | null>(null);
+  const { data, isLoading, error } = useExpensesPage(query);
+  const { data: totals } = useFinanceTotals();
+  const { data: categoryTotals } = useExpenseCategoryTotals();
+  const { can } = useAuth();
   const [open, setOpen] = useState(false);
   const byCategory = useMemo(
     () =>
-      CATEGORIES.map((c) => ({
-        category: c,
-        amount: (data ?? []).filter((e) => e.category === c).reduce((s, e) => s + e.amount, 0),
-      })).sort((a, b) => b.amount - a.amount),
-    [data],
+      CATEGORIES.map((c) => ({ category: c, amount: categoryTotals?.[c] ?? 0 })).sort(
+        (a, b) => b.amount - a.amount,
+      ),
+    [categoryTotals],
   );
   if (error) return <ErrorState error={error} />;
-  const total = data?.reduce((s, e) => s + e.amount, 0) ?? 0;
-  const month = (data ?? [])
-    .filter((e) => e.date.startsWith(DEMO_TODAY.slice(0, 7)))
-    .reduce((s, e) => s + e.amount, 0);
+  const allTime = Object.values(categoryTotals ?? {}).reduce((s, v) => s + v, 0);
   const columns: Column<ExpenseView>[] = [
     { id: "date", header: "Date", sortValue: (e) => e.date, cell: (e) => formatDate(e.date) },
     {
@@ -360,22 +370,29 @@ export function ExpensesPage() {
         title="Expenses"
         description="Labour, loading, unloading, fuel, tolls and waiting charges — linked to orders and trips where possible."
         actions={
-          <Button onClick={() => setOpen(true)}>
-            <Plus className="size-4" /> Add expense
-          </Button>
+          can("record_payments") && (
+            <Button onClick={() => setOpen(true)}>
+              <Plus className="size-4" /> Add expense
+            </Button>
+          )
         }
       />
       <div className="mb-4 grid gap-4 xl:grid-cols-[1fr_1.5fr]">
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
-          <KpiCard label="This month" value={formatINRCompact(month)} icon={Wallet} tone="amber" />
           <KpiCard
-            label="Since June"
-            value={formatINRCompact(total)}
-            hint={`${data?.length ?? 0} entries`}
+            label="This month"
+            value={totals ? formatINRCompact(totals.expensesMonth) : "—"}
+            icon={Wallet}
+            tone="amber"
+          />
+          <KpiCard
+            label="Matching the filters"
+            value={data ? formatINRCompact(data.sum) : "—"}
+            hint={`${data?.total ?? 0} entries · ${formatINRCompact(allTime)} all time`}
             icon={Wallet}
           />
         </div>
-        <SectionCard title="By category" description="Since June">
+        <SectionCard title="By category" description="All recorded expenses">
           <ChartBox height={220} label="Bar chart of expenses by category">
             <ResponsiveContainer>
               <BarChart data={byCategory} layout="vertical" margin={{ left: 8, right: 16 }}>
@@ -403,8 +420,9 @@ export function ExpensesPage() {
         </SectionCard>
       </div>
       <DataTable
-        data={data}
-        isLoading={isLoading}
+        data={data?.rows}
+        isLoading={isLoading || !query}
+        server={{ total: data?.total ?? 0, onQueryChange: setQuery }}
         columns={columns}
         getRowId={(e) => e.id}
         searchText={(e) => `${e.description} ${e.paidTo} ${e.tripRef ?? ""} ${e.orderRef ?? ""}`}
@@ -417,20 +435,13 @@ export function ExpensesPage() {
             value: (e) => e.category,
           },
           {
-            id: "linked",
-            label: "Links",
-            options: [
-              { value: "trip", label: "Linked to trip" },
-              { value: "order", label: "Linked to order" },
-              { value: "none", label: "General" },
-            ],
-            value: (e) => (e.tripId ? "trip" : e.orderId ? "order" : "none"),
-          },
-          {
-            id: "by",
-            label: "Recorded by",
-            options: optionsFrom(data?.map((e) => e.recordedBy) ?? []),
-            value: (e) => e.recordedBy,
+            id: "mode",
+            label: "Modes",
+            options: ["UPI", "Bank Transfer", "Cheque", "Cash"].map((m) => ({
+              value: m,
+              label: m,
+            })),
+            value: (e) => e.mode,
           },
         ]}
         dateValue={(e) => e.date}

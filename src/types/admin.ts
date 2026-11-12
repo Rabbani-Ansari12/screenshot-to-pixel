@@ -54,6 +54,8 @@ export interface AppSettings {
     address: string;
     phone: string;
     email: string;
+    /** Printed on invoices, e.g. "HDFC Bank · A/c … · IFSC …". */
+    bankDetails: string;
   };
   gst: {
     gstin: string;
@@ -66,6 +68,15 @@ export interface AppSettings {
     prefix: string;
     format: string;
     nextNumber: number;
+  };
+  /** How payments are applied and checked. */
+  payments: {
+    /** "selected": against the chosen invoice / bill; "oldest_first": spread over open ones. */
+    allocation: "selected" | "oldest_first";
+    /** Allow amounts above the outstanding balance (kept on account as an advance). */
+    allowOverpayment: boolean;
+    /** Bill / invoice differences up to this many rupees still count as matched. */
+    billTolerance: number;
   };
   autoProcessThreshold: number;
   authoritativeWeight: "Loading" | "Delivery";

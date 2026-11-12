@@ -171,15 +171,8 @@ export const isPublicPath = (pathname: string) =>
  * Pages whose data still comes from the built-in sample data (src/data) until their module is
  * connected to Supabase. The app shell shows a notice on these pages.
  */
-export const SAMPLE_DATA_PREFIXES = [
-  "/reconciliation",
-  "/bills",
-  "/invoices",
-  "/payments",
-  "/expenses",
-  "/profit",
-  "/reports",
-];
+/** Pages still on sample data (the dashboard "/" is handled separately). */
+export const SAMPLE_DATA_PREFIXES = ["/reports"];
 
 export function usesSampleData(pathname: string): boolean {
   if (pathname === "/") return true;

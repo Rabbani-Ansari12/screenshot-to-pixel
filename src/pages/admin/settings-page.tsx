@@ -55,6 +55,12 @@ const businessSchema = z.object({
     address: z.string().min(5),
     phone: z.string().min(8),
     email: z.string().email(),
+    bankDetails: z.string(),
+  }),
+  payments: z.object({
+    allocation: z.enum(["selected", "oldest_first"]),
+    allowOverpayment: z.boolean(),
+    billTolerance: z.number().min(0).max(10000),
   }),
   gst: z.object({
     gstin: z.string().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/, "Enter a valid GSTIN"),
@@ -89,6 +95,7 @@ function BusinessForms({ settings }: { settings: AppSettings }) {
     resolver: zodResolver(businessSchema),
     defaultValues: {
       business: settings.business,
+      payments: settings.payments,
       gst: settings.gst,
       invoiceNumbering: settings.invoiceNumbering,
     },
@@ -139,7 +146,73 @@ function BusinessForms({ settings }: { settings: AppSettings }) {
             {text("business.address", "Registered address", true)}
             {text("business.phone", "Phone")}
             {text("business.email", "Accounts email")}
+            {text("business.bankDetails", "Bank details printed on invoices", true)}
           </div>
+        </SectionCard>
+        <SectionCard
+          title={
+            <span className="flex items-center gap-2">
+              <Receipt className="size-4 text-primary" />
+              Payments & reconciliation
+            </span>
+          }
+        >
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FormField
+              control={form.control}
+              name="payments.allocation"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Apply payments</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="selected">To the chosen invoice / bill</SelectItem>
+                      <SelectItem value="oldest_first">Oldest open first</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="payments.billTolerance"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Match tolerance (₹)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      value={field.value}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="payments.allowOverpayment"
+              render={({ field }) => (
+                <FormItem className="flex flex-col justify-end">
+                  <FormLabel>Allow advances</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Payments above the outstanding balance are refused unless advances are allowed; then the
+            extra is kept on account. Bill and invoice differences within the tolerance count as
+            matched.
+          </p>
         </SectionCard>
         <SectionCard
           title={

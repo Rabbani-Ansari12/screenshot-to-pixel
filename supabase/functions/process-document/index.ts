@@ -156,6 +156,24 @@ Deno.serve(async (req) => {
       if (error) throw new Error(`duplicate check: ${error.message}`);
       return data?.[0]?.id ?? null;
     },
+    async billParties(businessId, kind) {
+      const { data, error } = await admin
+        .from(kind === "provider" ? "material_providers" : "transporters")
+        .select("id, name, gstin")
+        .eq("business_id", businessId)
+        .is("deleted_at", null);
+      if (error) throw new Error(`bill parties: ${error.message}`);
+      return (data ?? []).map((p) => ({ id: p.id, name: p.name, gstin: p.gstin ?? null }));
+    },
+    async materials(businessId) {
+      const { data, error } = await admin
+        .from("materials")
+        .select("id, name")
+        .eq("business_id", businessId)
+        .is("deleted_at", null);
+      if (error) throw new Error(`materials: ${error.message}`);
+      return data ?? [];
+    },
     async recordExtraction(documentId, payload) {
       const { error } = await admin.rpc("record_document_extraction", {
         p_document_id: documentId,

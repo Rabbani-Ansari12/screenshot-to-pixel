@@ -238,6 +238,12 @@ function deps(): Deps {
       }
       return null;
     },
+    async billParties() {
+      return [];
+    },
+    async materials() {
+      return [];
+    },
     async recordExtraction(documentId, payload) {
       docs.get(documentId)!.extracted = payload["extracted"];
     },

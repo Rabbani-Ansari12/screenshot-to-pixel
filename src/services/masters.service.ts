@@ -32,6 +32,7 @@ import {
   toYard,
   unitToDb,
 } from "./supabase/mappers";
+import { billsForParty, invoicesWhere, paymentsForParty } from "./finance-links";
 
 // ---------- Customers ----------
 export interface CustomerRow extends Customer {
@@ -85,15 +86,18 @@ export async function getCustomer(id: string): Promise<{
     fetchOrders({ customer_id: id }),
     fetchTrips({ customer_id: id }, 200),
   ]);
+  const [invoices, payments] = await Promise.all([
+    invoicesWhere({ customer_id: id }),
+    paymentsForParty(id),
+  ]);
   const customer = customers[0];
   if (!customer) throw new AppError("Customer not found.", null, "not_found");
   return {
     customer,
     sites: rows(sites).map(toSite),
     orders,
-    // Invoices and payments move to Supabase with the finance phase.
-    invoices: [],
-    payments: [],
+    invoices,
+    payments,
     trips,
   };
 }
@@ -148,14 +152,16 @@ export async function getProvider(id: string): Promise<{
   bills: BillView[];
   payments: PaymentView[];
 }> {
-  const [providers, purchases, trips] = await Promise.all([
+  const [providers, purchases, trips, bills, payments] = await Promise.all([
     providerRows(id),
     fetchPurchases({ provider_id: id }),
     fetchTrips({ provider_id: id }, 200),
+    billsForParty("provider", id),
+    paymentsForParty(id),
   ]);
   const provider = providers[0];
   if (!provider) throw new AppError("Provider not found.", null, "not_found");
-  return { provider, purchases, trips, bills: [], payments: [] };
+  return { provider, purchases, trips, bills, payments };
 }
 
 // ---------- Transporters & vehicles ----------
@@ -252,14 +258,16 @@ export async function getTransporter(id: string): Promise<{
   bills: BillView[];
   payments: PaymentView[];
 }> {
-  const [transporters, vehicles, trips] = await Promise.all([
+  const [transporters, vehicles, trips, bills, payments] = await Promise.all([
     transporterRows(id),
     vehicleRows({ transporterId: id }),
     fetchTrips({ transporter_id: id }, 200),
+    billsForParty("transporter", id),
+    paymentsForParty(id),
   ]);
   const transporter = transporters[0];
   if (!transporter) throw new AppError("Transporter not found.", null, "not_found");
-  return { transporter, vehicles, trips, bills: [], payments: [] };
+  return { transporter, vehicles, trips, bills, payments };
 }
 
 export async function listVehicles(): Promise<VehicleRow[]> {

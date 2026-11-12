@@ -1,5 +1,5 @@
 import type { StockMovementView, Unit, Yard } from "@/types";
-import { rows } from "./supabase/errors";
+import { check, rows } from "./supabase/errors";
 import { sb } from "./supabase/fetch";
 import { num, toStockMovementView, toYard, unitFromDb } from "./supabase/mappers";
 
@@ -60,4 +60,26 @@ export async function getStock(
     balances: [...byMaterial.values()].filter((x) => x.received > 0 || x.balance !== 0),
     movements: rows(l).map(toStockMovementView),
   };
+}
+
+export interface StockAdjustmentInput {
+  yardId: string;
+  materialId: string;
+  /** Positive adds, negative removes (e.g. after a physical count). */
+  quantity: number;
+  date: string;
+  reason: string;
+}
+
+/** Owner only; the reason is stored in the audit log. Purchases and trips are never changed. */
+export async function adjustStock(input: StockAdjustmentInput): Promise<void> {
+  check(
+    await sb().rpc("adjust_stock", {
+      p_location_id: input.yardId,
+      p_material_id: input.materialId,
+      p_quantity: input.quantity,
+      p_date: input.date,
+      p_reason: input.reason,
+    }),
+  );
 }
