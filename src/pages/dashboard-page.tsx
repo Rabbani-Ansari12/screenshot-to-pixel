@@ -56,6 +56,7 @@ export function DashboardPage() {
   const { data, isLoading, error } = useDashboard();
   const { user, can } = useAuth();
   const [upload, setUpload] = useState(false);
+  const [allFigures, setAllFigures] = useState(false);
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <PageSkeleton kpis={8} />;
   const { kpis, automation } = data;
@@ -105,100 +106,69 @@ export function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         title={`${greeting}, ${firstName}`}
-        description={`Here's what needs you today. Everything else is being recorded automatically · ${formatDate(todayIST())}`}
+        description={`Here's what needs you today · ${formatDate(todayIST())}`}
         actions={
-          <>
-            <Button variant="outline" onClick={() => setUpload(true)}>
-              <FileUp className="size-4" /> Upload document
+          can("manage_orders") && (
+            <Button variant="outline" asChild>
+              <Link to="/orders/new">
+                <ClipboardList className="size-4" /> New order
+              </Link>
             </Button>
-            {can("manage_orders") && (
-              <Button asChild>
-                <Link to="/orders/new">
-                  <ClipboardList className="size-4" /> New order
-                </Link>
-              </Button>
-            )}
-          </>
+          )
         }
       />
 
-      <section
-        aria-label="Key figures"
-        className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5"
+      <button
+        type="button"
+        onClick={() => setUpload(true)}
+        className="group flex w-full items-center gap-4 rounded-2xl border-2 border-dashed border-primary/35 bg-primary/5 p-5 text-left transition-colors hover:border-primary/60 hover:bg-primary/10 sm:p-6"
       >
-        <KpiCard
-          label="Active orders"
-          value={kpis.activeOrders}
-          hint="Confirmed, in progress or on hold"
-          icon={ClipboardList}
-          href="/orders"
+        <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm sm:size-14">
+          <FileUp className="size-6" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-lg font-bold leading-tight">
+            Upload a receipt or slip
+          </span>
+          <span className="mt-0.5 block text-sm text-muted-foreground">
+            Take a photo or choose a PDF. AI reads the vehicle, weights and amounts and records them
+            on the right trip.
+          </span>
+        </span>
+        <ArrowRight
+          className="hidden size-5 shrink-0 text-primary transition-transform group-hover:translate-x-0.5 sm:block"
+          aria-hidden
         />
-        <KpiCard
-          label="Purchased this month"
-          value={`${formatNumber(kpis.purchasedMT)} MT`}
-          hint={data.monthLabel}
-          icon={ArrowDownToLine}
-          tone="amber"
-          href="/purchases"
-        />
-        <KpiCard
-          label="Dispatched this month"
-          value={`${formatNumber(kpis.dispatchedMT)} MT`}
-          hint="Loading weight"
-          icon={Truck}
-          href="/trips"
-        />
-        <KpiCard
-          label="Delivered this month"
-          value={`${formatNumber(kpis.deliveredMT)} MT`}
-          hint="Delivery weight"
-          icon={PackageCheck}
-          tone="green"
-          href="/trips"
-        />
-        <KpiCard
-          label="Active trips"
-          value={kpis.activeTrips}
-          hint="Loaded or in transit"
-          icon={Truck}
-          tone="blue"
-          href="/trips"
-        />
-        <KpiCard
-          label="Trips needing verification"
-          value={kpis.tripsToVerify}
-          hint="Difference above tolerance"
-          icon={AlertTriangle}
-          tone="amber"
-          emphasis={kpis.tripsToVerify > 0}
-          href="/shortages"
-        />
-        <KpiCard
-          label="Documents this month"
-          value={kpis.documentsReceived}
-          hint={`${kpis.documentsStaff} staff upload · ${kpis.documentsDriver} driver link · ${kpis.autoProcessedPct}% automatic`}
-          icon={FileUp}
-          href="/uploads"
-        />
-        <KpiCard
-          label="Needs attention"
-          value={kpis.needsAttention}
-          hint="Reviews, shortages and bill differences"
-          icon={AlertTriangle}
-          tone="red"
-          emphasis={kpis.needsAttention > 0}
-          href="/review"
-        />
-        {showMoney && (
-          <>
-            <KpiCard
-              label="Pending bills"
-              value={kpis.pendingProviderBills + kpis.pendingTransporterBills}
-              hint={`${kpis.pendingProviderBills} provider · ${kpis.pendingTransporterBills} transporter`}
-              icon={Scale}
-              tone="amber"
-              href="/reconciliation"
-            />
+      </button>
+
+      <section aria-label="Key figures" className="space-y-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <KpiCard
+            label="Needs attention"
+            value={kpis.needsAttention}
+            hint="Reviews, shortages and bill differences"
+            icon={AlertTriangle}
+            tone="red"
+            emphasis={kpis.needsAttention > 0}
+            href="/review"
+          />
+          <KpiCard
+            label="Trucks on the road"
+            value={kpis.activeTrips}
+            hint="Loaded or in transit"
+            icon={Truck}
+            tone="blue"
+            href="/trips"
+          />
+          <KpiCard
+            label="Delivered this month"
+            value={`${formatNumber(kpis.deliveredMT)} MT`}
+            hint="Delivery weight"
+            icon={PackageCheck}
+            tone="green"
+            href="/trips"
+          />
+          {showMoney ? (
             <KpiCard
               label="Customer outstanding"
               value={formatINRCompact(kpis.customerOutstanding)}
@@ -206,32 +176,105 @@ export function DashboardPage() {
               icon={Wallet}
               href="/payments"
             />
+          ) : (
             <KpiCard
-              label="Provider payable"
-              value={formatINRCompact(kpis.providerPayable)}
-              hint="Unpaid provider bills"
-              icon={IndianRupee}
-              tone="amber"
-              href="/bills/provider"
+              label="Documents this month"
+              value={kpis.documentsReceived}
+              hint={`${kpis.autoProcessedPct}% read automatically`}
+              icon={FileUp}
+              href="/documents"
+            />
+          )}
+        </div>
+        {allFigures && (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <KpiCard
+              label="Active orders"
+              value={kpis.activeOrders}
+              hint="Confirmed, in progress or on hold"
+              icon={ClipboardList}
+              href="/orders"
             />
             <KpiCard
-              label="Transporter payable"
-              value={formatINRCompact(kpis.transporterPayable)}
-              hint="Unpaid transporter bills"
+              label="Purchased this month"
+              value={`${formatNumber(kpis.purchasedMT)} MT`}
+              hint={data.monthLabel}
+              icon={ArrowDownToLine}
+              tone="amber"
+              href="/purchases"
+            />
+            <KpiCard
+              label="Dispatched this month"
+              value={`${formatNumber(kpis.dispatchedMT)} MT`}
+              hint="Loading weight"
               icon={Truck}
-              tone="amber"
-              href="/bills/transporter"
+              href="/trips"
             />
             <KpiCard
-              label="Estimated profit"
-              value={formatINRCompact(kpis.estimatedProfit)}
-              hint={`${data.monthLabel} · not final`}
-              icon={Boxes}
-              tone="green"
-              href="/profit"
+              label="Trips needing verification"
+              value={kpis.tripsToVerify}
+              hint="Difference above tolerance"
+              icon={AlertTriangle}
+              tone="amber"
+              emphasis={kpis.tripsToVerify > 0}
+              href="/shortages"
             />
-          </>
+            {showMoney && (
+              <KpiCard
+                label="Documents this month"
+                value={kpis.documentsReceived}
+                hint={`${kpis.documentsStaff} staff upload · ${kpis.documentsDriver} driver link · ${kpis.autoProcessedPct}% automatic`}
+                icon={FileUp}
+                href="/uploads"
+              />
+            )}
+            {showMoney && (
+              <>
+                <KpiCard
+                  label="Pending bills"
+                  value={kpis.pendingProviderBills + kpis.pendingTransporterBills}
+                  hint={`${kpis.pendingProviderBills} provider · ${kpis.pendingTransporterBills} transporter`}
+                  icon={Scale}
+                  tone="amber"
+                  href="/reconciliation"
+                />
+                <KpiCard
+                  label="Provider payable"
+                  value={formatINRCompact(kpis.providerPayable)}
+                  hint="Unpaid provider bills"
+                  icon={IndianRupee}
+                  tone="amber"
+                  href="/bills/provider"
+                />
+                <KpiCard
+                  label="Transporter payable"
+                  value={formatINRCompact(kpis.transporterPayable)}
+                  hint="Unpaid transporter bills"
+                  icon={Truck}
+                  tone="amber"
+                  href="/bills/transporter"
+                />
+                <KpiCard
+                  label="Estimated profit"
+                  value={formatINRCompact(kpis.estimatedProfit)}
+                  hint={`${data.monthLabel} · not final`}
+                  icon={Boxes}
+                  tone="green"
+                  href="/profit"
+                />
+              </>
+            )}
+          </div>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          onClick={() => setAllFigures((v) => !v)}
+          aria-expanded={allFigures}
+        >
+          {allFigures ? "Show fewer figures" : "Show all figures"}
+        </Button>
       </section>
 
       <section aria-labelledby="automation-heading" className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">

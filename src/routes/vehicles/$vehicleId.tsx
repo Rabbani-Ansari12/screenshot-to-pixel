@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { VehicleDetailPage } from "@/pages/masters/vehicles-materials";
+import { VehicleDetailPage } from "@/pages/masters/truck-ledger-page";
 
 export const Route = createFileRoute("/vehicles/$vehicleId")({
   head: ({ params }) => ({

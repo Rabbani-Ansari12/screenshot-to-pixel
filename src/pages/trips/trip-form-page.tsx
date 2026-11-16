@@ -38,14 +38,16 @@ const schema = z
     yardId: z.string(),
     transporterId: z.string().min(1, "Choose a transporter"),
     vehicleId: z.string().min(1, "Choose a vehicle"),
-    driverId: z.string().min(1, "Choose a driver"),
+    // Optional: many transporters do not register drivers; the vehicle is what is matched.
+    driverId: z.string(),
     loadingGross: n("Enter gross weight"),
     loadingTare: n("Enter tare weight"),
     loadingSlip: z.string().min(1, "Enter slip number"),
     loadingAt: z.string().min(1, "Required"),
     delivered: z.boolean(),
-    deliveryGross: z.number(),
-    deliveryTare: z.number(),
+    // Empty (NaN) until "Already delivered" is ticked; checked in superRefine below.
+    deliveryGross: z.number().or(z.nan()),
+    deliveryTare: z.number().or(z.nan()),
     deliverySlip: z.string(),
     deliveryAt: z.string(),
     freight: n("Enter freight"),
@@ -336,7 +338,12 @@ export function TripFormPage({
                 vehicles.map((v) => ({ id: v.id, name: v.plate })),
                 !transporterId,
               )}
-              {select("driverId", "Driver", drivers, !transporterId)}
+              {select(
+                "driverId",
+                "Driver (optional)",
+                drivers,
+                !transporterId || drivers.length === 0,
+              )}
               <FormField
                 control={form.control}
                 name="freight"

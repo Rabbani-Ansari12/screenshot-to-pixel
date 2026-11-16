@@ -15,11 +15,12 @@ import {
   Inbox,
   Layers3,
   LayoutDashboard,
-  Upload,
+  Link2,
   Package,
   ReceiptIndianRupee,
   Scale,
   Settings2,
+  ShieldCheck,
   TrendingUp,
   Truck,
   Users,
@@ -35,72 +36,67 @@ export interface NavItem {
   /** Permission needed to see this page. Owner-only pages use "owner". */
   requires: Permission | "owner";
   badge?: "review";
+  /** Reachable (links, search, breadcrumbs) but not shown in the section tab strip. */
+  hidden?: boolean;
 }
 
-export interface NavGroup {
+/**
+ * A sidebar entry. The sidebar shows only sections; the pages inside a section appear as a small
+ * tab strip at the top of the page, so the menu stays short.
+ */
+export interface NavSection {
   label: string;
+  icon: LucideIcon;
   items: NavItem[];
+  badge?: "review";
+  /** false = not in the sidebar (reached from the account menu). */
+  sidebar?: boolean;
 }
 
-export const NAV_GROUPS: NavGroup[] = [
+export const NAV_SECTIONS: NavSection[] = [
   {
-    label: "Overview",
+    label: "Dashboard",
+    icon: LayoutDashboard,
     items: [{ label: "Dashboard", path: "/", icon: LayoutDashboard, requires: "view_records" }],
   },
   {
-    label: "Automation",
+    label: "Receipts & Slips",
+    icon: Inbox,
+    badge: "review",
     items: [
-      { label: "Document Inbox", path: "/documents", icon: Inbox, requires: "view_records" },
+      { label: "Document inbox", path: "/documents", icon: Inbox, requires: "view_records" },
       {
-        label: "Review Queue",
+        label: "Review queue",
         path: "/review",
         icon: CheckCheck,
         requires: "review_documents",
         badge: "review",
       },
-      { label: "Uploads & Links", path: "/uploads", icon: Upload, requires: "view_records" },
+      { label: "Uploads & links", path: "/uploads", icon: Link2, requires: "view_records" },
     ],
   },
   {
-    label: "Operations",
+    label: "Truck Ledger",
+    icon: Truck,
     items: [
-      { label: "Customer Orders", path: "/orders", icon: ClipboardList, requires: "view_records" },
+      { label: "Trips", path: "/trips", icon: Truck, requires: "view_records" },
+      { label: "Vehicles & drivers", path: "/vehicles", icon: HardHat, requires: "view_records" },
+      { label: "Transporters", path: "/transporters", icon: Truck, requires: "view_records" },
+      { label: "Shortages", path: "/shortages", icon: ArrowLeftRight, requires: "view_records" },
+    ],
+  },
+  {
+    label: "Orders & Stock",
+    icon: ClipboardList,
+    items: [
+      { label: "Customer orders", path: "/orders", icon: ClipboardList, requires: "view_records" },
       { label: "Purchases", path: "/purchases", icon: ArrowDownToLine, requires: "view_records" },
-      { label: "Truck Trips", path: "/trips", icon: Truck, requires: "view_records" },
-      {
-        label: "Delivery & Shortages",
-        path: "/shortages",
-        icon: ArrowLeftRight,
-        requires: "view_records",
-      },
-      { label: "Stock Ledger", path: "/stock", icon: Boxes, requires: "view_records" },
+      { label: "Stock", path: "/stock", icon: Boxes, requires: "view_records" },
     ],
   },
   {
-    label: "Verification",
-    items: [
-      {
-        label: "Bill Reconciliation",
-        path: "/reconciliation",
-        icon: Scale,
-        requires: "verify_bills",
-      },
-      {
-        label: "Provider Bills",
-        path: "/bills/provider",
-        icon: FileText,
-        requires: "verify_bills",
-      },
-      {
-        label: "Transporter Bills",
-        path: "/bills/transporter",
-        icon: FileCheck2,
-        requires: "verify_bills",
-      },
-    ],
-  },
-  {
-    label: "Finance",
+    label: "Money",
+    icon: Wallet,
     items: [
       {
         label: "Invoices",
@@ -111,41 +107,64 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Payments", path: "/payments", icon: CreditCard, requires: "record_payments" },
       { label: "Expenses", path: "/expenses", icon: Wallet, requires: "record_payments" },
       {
-        label: "Profit & Loss",
-        path: "/profit",
-        icon: TrendingUp,
-        requires: "view_financial_reports",
+        label: "Bill reconciliation",
+        path: "/reconciliation",
+        icon: Scale,
+        requires: "verify_bills",
+      },
+      // Reached from the Bill reconciliation tabs and dashboard figures.
+      {
+        label: "Provider bills",
+        path: "/bills/provider",
+        icon: FileText,
+        requires: "verify_bills",
+        hidden: true,
+      },
+      {
+        label: "Transporter bills",
+        path: "/bills/transporter",
+        icon: FileCheck2,
+        requires: "verify_bills",
+        hidden: true,
       },
     ],
   },
   {
-    label: "Masters",
+    label: "Contacts",
+    icon: Building2,
     items: [
       { label: "Customers", path: "/customers", icon: Building2, requires: "view_records" },
-      { label: "Material Providers", path: "/providers", icon: Package, requires: "view_records" },
-      { label: "Transporters", path: "/transporters", icon: Truck, requires: "view_records" },
-      { label: "Vehicles & Drivers", path: "/vehicles", icon: HardHat, requires: "view_records" },
+      { label: "Material providers", path: "/providers", icon: Package, requires: "view_records" },
       { label: "Materials", path: "/materials", icon: Layers3, requires: "view_records" },
     ],
   },
   {
     label: "Reports",
+    icon: BarChart3,
     items: [
+      {
+        label: "Profit & loss",
+        path: "/profit",
+        icon: TrendingUp,
+        requires: "view_financial_reports",
+      },
       { label: "Reports", path: "/reports", icon: BarChart3, requires: "view_financial_reports" },
     ],
   },
   {
     label: "Admin",
+    icon: ShieldCheck,
+    sidebar: false,
     items: [
-      { label: "Employees & Permissions", path: "/employees", icon: Users, requires: "owner" },
-      { label: "Audit History", path: "/audit", icon: FileClock, requires: "owner" },
-      { label: "System Health", path: "/system", icon: Activity, requires: "owner" },
+      { label: "Employees", path: "/employees", icon: Users, requires: "owner" },
       { label: "Settings", path: "/settings", icon: Settings2, requires: "owner" },
+      { label: "Audit history", path: "/audit", icon: FileClock, requires: "owner" },
+      { label: "System health", path: "/system", icon: Activity, requires: "owner" },
     ],
   },
 ];
 
-export const NAV_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
+export const NAV_ITEMS = NAV_SECTIONS.flatMap((s) => s.items);
 
 /** The nav item that owns a pathname (longest matching prefix). */
 export function navItemFor(pathname: string): NavItem | undefined {
@@ -163,16 +182,17 @@ export function navItemFor(pathname: string): NavItem | undefined {
   );
 }
 
+/** The section a nav item belongs to. */
+export function sectionFor(item: NavItem | undefined): NavSection | undefined {
+  return item ? NAV_SECTIONS.find((s) => s.items.includes(item)) : undefined;
+}
+
 export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password"];
 
 /** Pages outside the signed-in app: auth pages and the driver upload page (/u/:token). */
 export const isPublicPath = (pathname: string) =>
   PUBLIC_PATHS.includes(pathname) || pathname.startsWith("/u/");
 
-/**
- * Pages whose data still comes from the built-in sample data (src/data) until their module is
- * connected to Supabase. The app shell shows a notice on these pages.
- */
 /** Pages still on sample data. Every page now reads live data. */
 export const SAMPLE_DATA_PREFIXES: string[] = [];
 

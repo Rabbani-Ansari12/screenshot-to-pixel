@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -75,7 +75,7 @@ export function PaymentDialog({
 }) {
   const { data: options } = useMasterOptions();
   const { data: settings } = useSettings();
-  const { data: target } = usePaymentTarget(open ? (preset ?? "") : "");
+  const { data: target, isLoading: targetLoading } = usePaymentTarget(open ? (preset ?? "") : "");
   const oldestFirst = settings?.payments.allocation === "oldest_first";
   const advances = Boolean(settings?.payments.allowOverpayment);
   const form = useForm<Values>({
@@ -106,16 +106,24 @@ export function PaymentDialog({
       `Recorded ${p.ref}${p.onAccount > 0 ? ` · ${formatINR(p.onAccount)} kept on account` : ""}`,
   );
 
+  // Pre-fill from the invoice / bill once per opening, without overwriting anything typed.
+  const [prefilled, setPrefilled] = useState<string | null>(null);
   useEffect(() => {
-    if (!open || !target) return;
-    form.reset({
-      ...form.getValues(),
-      partyType: target.partyType,
-      partyId: target.partyId,
-      againstId: target.id,
-      amount: target.balance,
-    });
-  }, [open, target, form]);
+    if (!open) {
+      setPrefilled(null);
+      return;
+    }
+    if (!target || prefilled === target.id) return;
+    setPrefilled(target.id);
+    form.setValue("partyType", target.partyType);
+    form.setValue("partyId", target.partyId);
+    form.setValue("againstId", target.id);
+    if (!form.getFieldState("amount").isDirty) form.setValue("amount", target.balance);
+  }, [open, target, form, prefilled]);
+  // Opened from an invoice / bill: wait until its details are filled in before saving.
+  const waitingForTarget = Boolean(
+    open && preset && (targetLoading || (target && prefilled !== target.id)),
+  );
 
   const parties = useMemo(() => {
     const list =
@@ -410,8 +418,9 @@ export function PaymentDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="submit" form="payment-form" disabled={record.isPending}>
-            {record.isPending && <Loader2 className="size-4 animate-spin" />}Record payment
+          <Button type="submit" form="payment-form" disabled={record.isPending || waitingForTarget}>
+            {(record.isPending || waitingForTarget) && <Loader2 className="size-4 animate-spin" />}
+            {waitingForTarget ? "Loading invoice…" : "Record payment"}
           </Button>
         </DialogFooter>
       </DialogContent>

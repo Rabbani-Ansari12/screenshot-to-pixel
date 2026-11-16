@@ -13,6 +13,16 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { devices, expect, test, type Page } from "@playwright/test";
 
+/** Types the credentials; retypes if the page finished loading and cleared the form. */
+async function fillSignIn(page: Page, email: string, password: string) {
+  for (let i = 0; i < 3; i++) {
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.waitForTimeout(300);
+    if ((await page.getByLabel("Email").inputValue()) === email) return;
+  }
+}
+
 const env = (k: string) => process.env[k] ?? "";
 const owner = { email: env("E2E_OWNER_EMAIL"), password: env("E2E_OWNER_PASSWORD") };
 const supabaseUrl = env("E2E_SUPABASE_URL") || env("VITE_SUPABASE_URL");
@@ -21,10 +31,20 @@ const slip = "supabase/functions/process-document/fixtures/clean-unloading.png";
 const today = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 10);
 
 async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(owner.email);
-  await page.getByLabel("Password", { exact: true }).fill(owner.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  // Wait for the app to finish loading, or typing is lost when React takes over the form.
+  await page.goto("/login", { waitUntil: "networkidle" });
+  // Retry the whole attempt if the page finished loading mid-way and cleared the form.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await fillSignIn(page, owner.email, owner.password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    const left = await page
+      .waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 10_000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (left) break;
+  }
   await expect(page).not.toHaveURL(/\/login/);
 }
 
@@ -192,7 +212,7 @@ test("order → trip → bills → reconcile → invoice → payment → profit"
   const decide = async (button: string, note: string) => {
     await page.getByRole("button", { name: button }).first().click();
     await page.getByLabel("Note").fill(note);
-    await page.getByRole("dialog").getByRole("button", { name: button }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: button }).click();
   };
   if (
     await page
@@ -217,9 +237,10 @@ test("order → trip → bills → reconcile → invoice → payment → profit"
 
   // ---- Partial payment; the database keeps the balance ----
   await page.getByRole("link", { name: "Record payment" }).click();
-  await page.getByLabel("Amount (₹)").fill("20000");
-  await page.getByLabel("Reference").fill(`UTR-${billNo}`);
-  await page.getByRole("button", { name: "Record payment" }).last().click();
+  const payment = page.getByRole("dialog");
+  await payment.getByLabel("Amount (₹)").fill("20000");
+  await payment.getByLabel("Reference").fill(`UTR-${billNo}`);
+  await payment.getByRole("button", { name: "Record payment" }).click();
   await expect(page.getByText(/Recorded PAY-/)).toBeVisible();
   const { data: inv } = await db
     .from("v_invoice_list")

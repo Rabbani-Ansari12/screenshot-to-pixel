@@ -160,3 +160,35 @@ export interface PartyBalance {
   d60: number;
   d90: number;
 }
+
+/** Where a trip's freight stands with the transporter. */
+export type FreightStatus = "Not billed" | "Unpaid" | "Part paid" | "Paid" | "Cancelled";
+
+/** One trip on a truck's ledger, with its freight and the transporter bill it was billed on. */
+export interface TruckLedgerRow {
+  trip: TripView;
+  /** Freight recorded on the trip (0 for cancelled trips). */
+  freight: number;
+  billId: ID | null;
+  billNo: string | null;
+  /** Amount the transporter billed for this trip (before tax), or null when not billed yet. */
+  billed: number | null;
+  /** This trip's share of payments made against its bill (bill paid ÷ bill total × billed). */
+  paid: number;
+  /** Still owed for this trip: billed − paid, or the recorded freight when not billed yet. */
+  due: number;
+  freightStatus: FreightStatus;
+}
+
+export interface TruckLedgerTotals {
+  trips: number;
+  /** Delivered MT (trips weighed in MT only). */
+  deliveredMT: number;
+  freight: number;
+  billed: number;
+  paid: number;
+  /** Owed on transporter bills already received. */
+  dueOnBills: number;
+  /** Freight of trips the transporter has not billed yet. */
+  notBilled: number;
+}

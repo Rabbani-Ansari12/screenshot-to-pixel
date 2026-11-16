@@ -4,6 +4,16 @@
  */
 import { expect, test, type Page } from "@playwright/test";
 
+/** Types the credentials; retypes if the page finished loading and cleared the form. */
+async function fillSignIn(page: Page, email: string, password: string) {
+  for (let i = 0; i < 3; i++) {
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password", { exact: true }).fill(password);
+    await page.waitForTimeout(300);
+    if ((await page.getByLabel("Email").inputValue()) === email) return;
+  }
+}
+
 const owner = {
   email: process.env["E2E_OWNER_EMAIL"],
   password: process.env["E2E_OWNER_PASSWORD"],
@@ -16,10 +26,20 @@ const hasOwner = Boolean(owner.email && owner.password);
 const hasEmployee = Boolean(employee.email && employee.password);
 
 async function signIn(page: Page, email: string, password: string) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  // Wait for the app to finish loading, or typing is lost when React takes over the form.
+  await page.goto("/login", { waitUntil: "networkidle" });
+  // Retry the whole attempt if the page finished loading mid-way and cleared the form.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await fillSignIn(page, email, password);
+    await page.getByRole("button", { name: "Sign in" }).click();
+    const left = await page
+      .waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 10_000 })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (left) break;
+  }
   await expect(page).not.toHaveURL(/\/login/);
 }
 
@@ -37,7 +57,7 @@ async function pickEntity(page: Page, name: string) {
 
 test.describe("login", () => {
   test("shows the sign-in form and rejects a wrong password", async ({ page }) => {
-    await page.goto("/orders");
+    await page.goto("/orders", { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
     await page.getByLabel("Email").fill("nobody@example.com");
     await page.getByLabel("Password", { exact: true }).fill("wrong-password-123");
@@ -53,10 +73,7 @@ test.describe("owner", () => {
     await signIn(page, owner.email!, owner.password!);
     await page.goto("/orders/new");
     await pickEntity(page, "Customer");
-    await pickFirst(
-      page,
-      page.getByRole("combobox", { name: /site/i }).or(page.getByText("Choose site")),
-    );
+    await pickFirst(page, page.getByRole("combobox", { name: "Construction site" }));
     await page.getByPlaceholder("e.g. SBPL/PO/0540").fill(`E2E-${Date.now()}`);
     await pickFirst(page, page.getByRole("combobox", { name: "Material" }));
     await page.getByLabel("Quantity").fill("12");
@@ -90,28 +107,25 @@ test.describe("owner", () => {
 async function createTrip(page: Page) {
   await page.goto("/trips/new");
   await pickEntity(page, "Order");
-  await page
-    .getByText("Choose material")
-    .click()
-    .catch(() => undefined); // auto-picked when only one
+  // The material is picked automatically when the order has only one.
   if (
     await page
-      .getByRole("option")
-      .first()
+      .getByText("Choose material")
       .isVisible()
       .catch(() => false)
   )
-    await page.getByRole("option").first().click();
+    await pickFirst(page, page.getByText("Choose material"));
   await pickFirst(page, page.getByText("Choose provider"));
   await pickFirst(page, page.getByText("Choose transporter"));
   await pickFirst(page, page.getByText("Choose vehicle"));
-  if (
-    await page
-      .getByText("Choose driver")
-      .isVisible()
-      .catch(() => false)
-  )
-    await pickFirst(page, page.getByText("Choose driver"));
+  // Driver is optional: pick one only if the transporter has drivers.
+  const driver = page.getByRole("combobox", { name: /Driver/ });
+  if (await driver.isEnabled().catch(() => false)) {
+    await driver.click();
+    if ((await page.getByRole("option").count()) > 0)
+      await page.getByRole("option").first().click();
+    else await page.keyboard.press("Escape");
+  }
   await page.getByLabel("Gross (MT)").first().fill("42.18");
   await page.getByLabel("Tare (MT)").first().fill("14.06");
   await page.getByPlaceholder("WB-12345").fill(`E2E-${Date.now()}`);

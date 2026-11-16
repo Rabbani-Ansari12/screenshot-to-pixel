@@ -41,6 +41,23 @@ export const useDocument = (id: string) =>
 export const useReviewItems = () => useQuery(q(["review"], review.listReviewItems));
 export const useReviewItem = (id: string) =>
   useQuery(q(["review", id], () => review.getReviewItem(id)));
+/**
+ * Follows freshly uploaded documents: re-reads them every 3 s until every one has finished
+ * reading, then stops. Gives up polling after 3 minutes (the documents keep processing).
+ */
+export const useUploadedDocuments = (ids: string[]) =>
+  useQuery({
+    ...q(["documents", "uploaded", ...ids], () => documents.getDocumentsByIds(ids), ids.length > 0),
+    staleTime: 0,
+    refetchInterval: (query) => {
+      const list = query.state.data;
+      const done =
+        list?.length === ids.length &&
+        list.every((d) => documents.FINAL_STATUSES.includes(d.status));
+      const tooLong = query.state.dataUpdateCount > 60;
+      return done || tooLong ? false : 3_000;
+    },
+  });
 export const useOpenTrips = (enabled = true) =>
   useQuery(q(["trips", "open"], review.listOpenTrips, enabled));
 export const useOrders = () => useQuery(q(["orders"], orders.listOrders));
@@ -232,13 +249,13 @@ export function useAction<TArgs, TResult>(
   const client = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: async (result) => {
-      if (options.invalidate)
-        await Promise.all(
-          options.invalidate.map((queryKey) => client.invalidateQueries({ queryKey })),
-        );
-      else await client.invalidateQueries();
+    onSuccess: (result) => {
+      // Confirm at once; the affected data reloads in the background (awaiting every refetch
+      // kept dialogs busy for seconds after the save had already succeeded).
       if (success) toast.success(typeof success === "function" ? success(result) : success);
+      if (options.invalidate)
+        for (const queryKey of options.invalidate) void client.invalidateQueries({ queryKey });
+      else void client.invalidateQueries();
     },
     onError: (error) =>
       toast.error(error instanceof Error ? error.message : "Something went wrong"),

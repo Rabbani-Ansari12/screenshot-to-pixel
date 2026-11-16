@@ -15,6 +15,7 @@ import type {
   Site,
   Transporter,
   TripView,
+  TruckLedgerRow,
   Vehicle,
   Yard,
 } from "@/types";
@@ -32,7 +33,13 @@ import {
   toYard,
   unitToDb,
 } from "./supabase/mappers";
-import { billsForParty, invoicesWhere, paymentsForParty } from "./finance-links";
+import {
+  billsForParty,
+  invoicesWhere,
+  paymentsForParty,
+  transporterBillLinesForTrips,
+} from "./finance-links";
+import { buildTruckLedger } from "./truck-ledger";
 
 // ---------- Customers ----------
 export interface CustomerRow extends Customer {
@@ -274,19 +281,36 @@ export async function listVehicles(): Promise<VehicleRow[]> {
   return vehicleRows();
 }
 
-export async function getVehicle(
-  id: string,
-): Promise<{ vehicle: VehicleRow; trips: TripView[]; driver: Driver | null }> {
+/** Most recent trips shown on a truck's page and ledger. */
+export const VEHICLE_TRIP_CAP = 200;
+
+export async function getVehicle(id: string): Promise<{
+  vehicle: VehicleRow;
+  trips: TripView[];
+  driver: Driver | null;
+  /** Every trip with its freight and transporter bill status, newest first. */
+  ledger: TruckLedgerRow[];
+}> {
   const [vehicles, trips] = await Promise.all([
     vehicleRows({ id }),
-    fetchTrips({ vehicle_id: id }, 200),
+    fetchTrips({ vehicle_id: id }, VEHICLE_TRIP_CAP),
   ]);
   const vehicle = vehicles[0];
   if (!vehicle) throw new AppError("Vehicle not found.", null, "not_found");
-  const driver = vehicle.driverId
-    ? unwrapMaybe(await sb().from("drivers").select("*").eq("id", vehicle.driverId).maybeSingle())
-    : null;
-  return { vehicle, trips, driver: driver ? toDriver(driver) : null };
+  // RLS returns no bills to users without finance access; the ledger then shows trips only.
+  const [driver, billing] = await Promise.all([
+    vehicle.driverId
+      ? sb().from("drivers").select("*").eq("id", vehicle.driverId).maybeSingle()
+      : Promise.resolve(null),
+    transporterBillLinesForTrips(trips.map((t) => t.uuid ?? "")),
+  ]);
+  const driverRow = driver ? unwrapMaybe(driver) : null;
+  return {
+    vehicle,
+    trips,
+    driver: driverRow ? toDriver(driverRow) : null,
+    ledger: buildTruckLedger(trips, billing.lines, billing.bills),
+  };
 }
 
 // ---------- Materials ----------

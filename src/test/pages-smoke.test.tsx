@@ -4,7 +4,7 @@
  * in-memory fake Supabase client with fixture rows.
  * Fails if a page throws, logs a React error, or never leaves its loading state.
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -65,9 +65,9 @@ import {
 import {
   MaterialDetailPage,
   MaterialsPage,
-  VehicleDetailPage,
   VehiclesPage,
 } from "@/pages/masters/vehicles-materials";
+import { VehicleDetailPage } from "@/pages/masters/truck-ledger-page";
 import { ReportPage, ReportsCatalogPage } from "@/pages/reports-page";
 import { EmployeesPage } from "@/pages/admin/employees-page";
 import { AuditPage } from "@/pages/admin/audit-page";
@@ -190,7 +190,7 @@ const PAGES: [string, RegExp, () => ReactNode][] = [
     () => <TransporterDetailPage transporterId={ID.transporter} />,
   ],
   ["/vehicles", /Add vehicle/, () => <VehiclesPage />],
-  [`/vehicles/${ID.vehicle}`, /Trip history/, () => <VehicleDetailPage vehicleId={ID.vehicle} />],
+  [`/vehicles/${ID.vehicle}`, /Truck ledger/, () => <VehicleDetailPage vehicleId={ID.vehicle} />],
   ["/materials", /Add material/, () => <MaterialsPage />],
   [
     `/materials/${ID.material}`,
@@ -271,7 +271,8 @@ describe("every page renders", () => {
       () => expect(screen.getByText("You don't have access to this page")).toBeInTheDocument(),
       { timeout: 8000 },
     );
-    expect(screen.queryByRole("link", { name: /Employees & Permissions/ })).toBeNull();
+    const menu = screen.getByRole("navigation", { name: "Main navigation" });
+    expect(within(menu).queryByRole("link", { name: /Money|Reports/ })).toBeNull();
   }, 15000);
 
   it("shows the login page without a session", async () => {
@@ -308,4 +309,77 @@ describe("every page renders", () => {
     expect(screen.queryByRole("link", { name: /New order/ })).toBeNull();
     expect(screen.queryByRole("link", { name: /Employees & Permissions/ })).toBeNull();
   }, 20000);
+});
+
+describe("navigation", () => {
+  const sidebarLinks = () =>
+    within(screen.getByRole("navigation", { name: "Main navigation" }))
+      .getAllByRole("link")
+      .map((a) => a.textContent?.replace(/\d+$/, "").trim());
+
+  it("shows the owner a short menu of sections and the pages of a section as tabs", async () => {
+    signInAs(ID.owner);
+    renderAt("/trips", () => <TripsPage />);
+    await waitFor(() => expect(screen.getAllByText(TRIP_CODE).length).toBeGreaterThan(0), {
+      timeout: 8000,
+    });
+    expect(sidebarLinks()).toEqual([
+      "Dashboard",
+      "Receipts & Slips",
+      "Truck Ledger",
+      "Orders & Stock",
+      "Money",
+      "Contacts",
+      "Reports",
+    ]);
+    const tabs = within(screen.getByRole("navigation", { name: "Section pages" }));
+    expect(tabs.getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Trips",
+      "Vehicles & drivers",
+      "Transporters",
+      "Shortages",
+    ]);
+    expect(tabs.getByRole("link", { name: "Trips" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getAllByRole("button", { name: /Upload receipt/ }).length).toBeGreaterThan(0);
+  }, 15000);
+
+  it("leaves out sections and tabs an employee cannot open", async () => {
+    signInAs(ID.employee); // view_records + manage_trips only
+    renderAt("/documents", () => <DocumentsPage />);
+    await waitFor(() => expect(screen.getAllByText(/Document Inbox/).length).toBeGreaterThan(0), {
+      timeout: 8000,
+    });
+    expect(sidebarLinks()).toEqual([
+      "Dashboard",
+      "Receipts & Slips",
+      "Truck Ledger",
+      "Orders & Stock",
+      "Contacts",
+    ]);
+    const tabs = within(screen.getByRole("navigation", { name: "Section pages" }));
+    expect(tabs.getAllByRole("link").map((a) => a.textContent)).toEqual([
+      "Document inbox",
+      "Uploads & links",
+    ]);
+  }, 15000);
+
+  it("shows no tab strip on detail pages", async () => {
+    signInAs(ID.owner);
+    renderAt(`/trips/${TRIP_CODE}`, () => <TripDetailPage tripId={TRIP_CODE} />);
+    await waitFor(() => expect(screen.getAllByText(TRIP_CODE).length).toBeGreaterThan(0), {
+      timeout: 8000,
+    });
+    expect(screen.queryByRole("navigation", { name: "Section pages" })).toBeNull();
+  }, 15000);
+
+  it("shows a truck's ledger with freight and the transporter bill status", async () => {
+    signInAs(ID.owner);
+    renderAt(`/vehicles/${ID.vehicle}`, () => <VehicleDetailPage vehicleId={ID.vehicle} />);
+    await waitFor(() => expect(screen.getAllByText(TRIP_CODE).length).toBeGreaterThan(0), {
+      timeout: 8000,
+    });
+    expect(screen.getAllByText("OS-41").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Unpaid").length).toBeGreaterThan(0);
+    expect(screen.getByText("Still to pay transporter")).toBeInTheDocument();
+  }, 15000);
 });

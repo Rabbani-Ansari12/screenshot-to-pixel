@@ -248,6 +248,25 @@ export async function listDocuments(): Promise<DocumentRecord[]> {
   return list.map((d) => toDocumentRecord(d, lk));
 }
 
+/** Documents by id, in the order asked (used to follow freshly uploaded files). */
+export async function getDocumentsByIds(ids: string[]): Promise<DocumentRecord[]> {
+  if (!ids.length) return [];
+  const list = await docRows((q) => q.in("id", ids));
+  const lk = await lookupsFor(list);
+  const byId = new Map(list.map((d) => [d.id, toDocumentRecord(d, lk)]));
+  return ids.map((id) => byId.get(id)).filter((d): d is DocumentRecord => Boolean(d));
+}
+
+/** Statuses after which a document's reading is finished (nothing more happens on its own). */
+export const FINAL_STATUSES: ProcessingStatus[] = [
+  "Matched",
+  "Automatically Recorded",
+  "Needs Review",
+  "Failed",
+  "Duplicate",
+  "Rejected",
+];
+
 async function docRow(id: string): Promise<DocRow> {
   const row = unwrapMaybe(await base().eq("id", id).maybeSingle());
   if (!row) throw new AppError("Document not found.", null, "not_found");

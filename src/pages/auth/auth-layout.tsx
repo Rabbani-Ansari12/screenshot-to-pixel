@@ -34,7 +34,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           </ul>
         </div>
         <p className="relative mt-12 text-xs text-sidebar-foreground/50">
-          Demo build · all data is sample data
+          Material supply, transport &amp; accounts
         </p>
       </div>
       <div className="flex items-center justify-center px-4 py-12 sm:px-8">

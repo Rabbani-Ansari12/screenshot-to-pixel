@@ -100,6 +100,7 @@ function BillReconcile({ billId }: { billId: string }) {
   const run = useAction(
     (v: { action: ReconAction; note: string }) => api.bills.reconcileBill(billId, v.action, v.note),
     (b) => `${b.billNo}: ${b.reconStatus}`,
+    { invalidate: [["bills"], ["invoices"], ["notifications"], ["dashboard"], ["profit"]] },
   );
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <DetailSkeleton />;
@@ -369,6 +370,7 @@ function InvoiceVerify({ invoiceId }: { invoiceId: string }) {
     (v: { action: ReconAction; note: string }) =>
       api.bills.reconcileInvoice(invoiceId, v.action, v.note),
     (i) => `${i.number}: ${i.reconStatus as ReconStatus}`,
+    { invalidate: [["bills"], ["invoices"], ["notifications"], ["dashboard"], ["profit"]] },
   );
   if (error) return <ErrorState error={error} />;
   if (isLoading || !data) return <DetailSkeleton />;

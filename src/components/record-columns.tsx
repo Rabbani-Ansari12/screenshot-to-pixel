@@ -110,7 +110,20 @@ export function tripColumns(opts: { hide?: string[] } = {}): Column<TripView>[] 
       header: "Vehicle",
       mobile: "subtitle",
       sortValue: (t) => t.vehiclePlate,
-      cell: (t) => <span className="whitespace-nowrap">{t.vehiclePlate}</span>,
+      cell: (t) =>
+        t.vehicleId ? (
+          <Link
+            to="/vehicles/$vehicleId"
+            params={{ vehicleId: t.vehicleId }}
+            onClick={stop}
+            className="whitespace-nowrap hover:text-primary hover:underline"
+          >
+            {t.vehiclePlate}
+          </Link>
+        ) : (
+          <span className="whitespace-nowrap">{t.vehiclePlate}</span>
+        ),
+      exportValue: (t) => t.vehiclePlate,
     },
     { id: "driver", header: "Driver", hideBelow: "xl", cell: (t) => t.driverName },
     {

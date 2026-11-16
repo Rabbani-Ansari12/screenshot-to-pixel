@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { AlertTriangle, Boxes, ClipboardList, Plus, Scale, Truck } from "lucide-react";
+import { Boxes, Plus, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -22,14 +22,7 @@ import {
   gridProps,
   series,
 } from "@/components/charts";
-import {
-  DetailList,
-  DetailSkeleton,
-  ErrorState,
-  InfoNote,
-  KpiCard,
-  SectionCard,
-} from "@/components/common";
+import { DetailSkeleton, ErrorState, InfoNote, KpiCard, SectionCard } from "@/components/common";
 import { DataTable, optionsFrom, type Column } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { QuickAddDialog } from "@/components/quick-add-dialog";
@@ -42,7 +35,6 @@ import {
   useMasterOptions,
   useMaterial,
   useMaterials,
-  useVehicle,
   useVehicles,
 } from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
@@ -220,143 +212,6 @@ export function VehiclesPage() {
         onSubmit={(v) => add.mutateAsync(v)}
         submitLabel="Add vehicle"
       />
-    </>
-  );
-}
-
-export function VehicleDetailPage({ vehicleId }: { vehicleId: string }) {
-  const { data, isLoading, error } = useVehicle(vehicleId);
-  if (error) return <ErrorState error={error} />;
-  if (isLoading || !data) return <DetailSkeleton />;
-  const { vehicle: v, trips, driver } = data;
-  const recent = trips
-    .filter((t) => t.difference !== null && t.unit === "MT")
-    .slice(0, 20)
-    .reverse();
-  return (
-    <>
-      <PageHeader
-        title={v.plate}
-        crumbs={[{ label: v.plate }]}
-        badge={
-          v.recurringShortage ? (
-            <StatusBadge status="Recurring difference" tone="warning" />
-          ) : (
-            <StatusBadge status={v.active ? "Active" : "Inactive"} />
-          )
-        }
-        description={
-          <>
-            {v.type} · {v.capacity} MT ·{" "}
-            <Link
-              to="/transporters/$transporterId"
-              params={{ transporterId: v.transporterId }}
-              className="text-primary hover:underline"
-            >
-              {v.transporterName}
-            </Link>
-          </>
-        }
-      />
-      {v.recurringShortage && (
-        <InfoNote tone="warning" className="mb-4">
-          This vehicle had {v.shortageCount} deliveries above tolerance. Worth checking the
-          tarpaulin, the loading weighbridge and the route — differences can have ordinary causes.
-        </InfoNote>
-      )}
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Trips" value={v.tripCount} icon={Truck} />
-        <KpiCard
-          label="Average difference"
-          value={`${formatNumber(v.avgDifference, 2)}`}
-          hint="Loading − delivery"
-          icon={Scale}
-        />
-        <KpiCard
-          label="Above tolerance"
-          value={v.shortageCount}
-          icon={AlertTriangle}
-          tone={v.shortageCount >= 3 ? "amber" : "green"}
-        />
-        <KpiCard
-          label="Driver"
-          value={<span className="text-lg">{driver?.name ?? "—"}</span>}
-          hint={driver?.phone}
-          icon={ClipboardList}
-          tone="blue"
-        />
-      </div>
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <SectionCard
-          title="Delivery difference per trip"
-          description="Last 20 weighed trips · MT"
-          actions={
-            <ChartLegend
-              items={[
-                { label: "Difference", color: series(0) },
-                { label: "Tolerance", color: series(1), dashed: true },
-              ]}
-            />
-          }
-        >
-          <ChartBox height={220} label="Line chart of delivery difference per trip">
-            <ResponsiveContainer>
-              <LineChart
-                data={recent.map((t) => ({
-                  id: t.id.slice(-5),
-                  difference: t.difference ?? 0,
-                  tolerance: t.tolerance,
-                }))}
-                margin={{ left: -16, right: 8, top: 8 }}
-              >
-                <CartesianGrid {...gridProps} />
-                <XAxis dataKey="id" {...axisProps} />
-                <YAxis {...axisProps} />
-                <Tooltip content={<ChartTooltip format="qty" unit="MT" />} />
-                <Line
-                  dataKey="tolerance"
-                  name="Tolerance"
-                  stroke={series(1)}
-                  strokeDasharray="5 4"
-                  dot={false}
-                  strokeWidth={2}
-                />
-                <Line
-                  dataKey="difference"
-                  name="Difference"
-                  stroke={series(0)}
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartBox>
-        </SectionCard>
-        <SectionCard title="Vehicle & driver">
-          <DetailList
-            columns={2}
-            items={[
-              { label: "Registration", value: v.plate },
-              { label: "Type", value: v.type },
-              { label: "Capacity", value: `${v.capacity} MT` },
-              { label: "Transporter", value: v.transporterName },
-              { label: "Driver", value: driver?.name ?? "—" },
-              { label: "Driver phone", value: driver?.phone ?? "—" },
-              { label: "Licence", value: driver?.licenseNo ?? "—" },
-              { label: "Login", value: "None — drivers send slips through the trip upload link" },
-            ]}
-          />
-        </SectionCard>
-      </div>
-      <SectionCard title={`Trip history (${trips.length})`} className="mt-4">
-        <SimpleTable
-          rows={trips}
-          getRowId={(t) => t.id}
-          rowHref={(t) => `/trips/${t.id}`}
-          maxRows={40}
-          columns={tripColumns({ hide: ["vehicle", "transporter", "driver", "docs"] })}
-        />
-      </SectionCard>
     </>
   );
 }

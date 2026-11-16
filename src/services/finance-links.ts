@@ -87,3 +87,37 @@ export async function financeForTrip(
     invoices: rows(invoices).map((r) => toInvoiceView(r)),
   };
 }
+
+/**
+ * Transporter bill lines matched to the given trips (database ids), with their bills.
+ * Asked for in chunks so the request URL stays short.
+ */
+export async function transporterBillLinesForTrips(tripUuids: string[]): Promise<{
+  lines: { tripUuid: string; billId: string; billedAmount: number }[];
+  bills: BillView[];
+}> {
+  const ids = [...new Set(tripUuids.filter(Boolean))];
+  if (!ids.length) return { lines: [], bills: [] };
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 80) chunks.push(ids.slice(i, i + 80));
+  const results = await Promise.all(
+    chunks.map((c) =>
+      sb()
+        .from("transporter_bill_trips")
+        .select("trip_id, bill_id, billed_amount")
+        .in("trip_id", c),
+    ),
+  );
+  const lines = results.flatMap((r) =>
+    rows(r).map((x) => ({
+      tripUuid: x.trip_id ?? "",
+      billId: x.bill_id,
+      billedAmount: Number(x.billed_amount) || 0,
+    })),
+  );
+  const billIds = [...new Set(lines.map((l) => l.billId))];
+  const bills = billIds.length
+    ? rows(await sb().from("v_bill_list").select("*").in("id", billIds)).map((r) => toBillView(r))
+    : [];
+  return { lines, bills };
+}

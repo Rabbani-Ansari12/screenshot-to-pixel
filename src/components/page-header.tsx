@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronRight, Home } from "lucide-react";
-import { NAV_GROUPS, navItemFor } from "@/lib/navigation";
+import { navItemFor, sectionFor } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 export interface Crumb {
@@ -13,10 +13,9 @@ export interface Crumb {
 export function Breadcrumbs({ extra = [] }: { extra?: Crumb[] }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const item = navItemFor(pathname);
-  const group = NAV_GROUPS.find((g) => item && g.items.includes(item));
+  const section = sectionFor(item);
   const crumbs: Crumb[] = [];
-  if (group && group.label !== "Overview" && group.label !== item?.label)
-    crumbs.push({ label: group.label });
+  if (section && section.label !== item?.label) crumbs.push({ label: section.label });
   if (item && item.path !== "/") crumbs.push({ label: item.label, href: item.path });
   crumbs.push(...extra);
   return (

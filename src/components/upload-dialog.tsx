@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EntityPicker } from "@/components/entity-picker";
+import { UploadResults } from "@/components/upload-results";
 import { api, useOpenTrips } from "@/hooks/queries";
 import { ACCEPTED, MAX_BYTES, prepareUpload, type PreparedUpload } from "@/lib/upload-prep";
 import { cn } from "@/lib/utils";
@@ -58,7 +59,9 @@ interface Pending {
   prepared?: PreparedUpload;
   /** Same file already stored (by content hash). */
   existing?: { id: string; ref: string };
-  error?: string;
+  error?: string | undefined;
+  /** Document created for this file once uploaded. */
+  docId?: string;
 }
 
 const accepted = (f: File) =>
@@ -113,19 +116,24 @@ export function UploadDialog({
     setProblem(null);
     const incoming = Array.from(list);
     const bad = incoming.filter((f) => !accepted(f) || f.size > MAX_BYTES);
+    const good = incoming.filter((f) => !bad.includes(f));
+    const room = Math.max(0, MAX_FILES - files.length);
+    const problems: string[] = [];
     if (bad.length)
-      setProblem(
+      problems.push(
         `${bad.map((f) => f.name).join(", ")}: use JPG, PNG, WebP, HEIC or PDF under 20 MB.`,
       );
-    const fresh = incoming
-      .filter((f) => !bad.includes(f))
-      .slice(0, Math.max(0, MAX_FILES - files.length))
-      .map((file) => ({
-        key: crypto.randomUUID(),
-        file,
-        type: AUTO as typeof AUTO,
-        state: "preparing" as FileState,
-      }));
+    if (good.length > room)
+      problems.push(
+        `Only ${MAX_FILES} files at a time — ${good.length - room} not added. Upload these first, then add the rest.`,
+      );
+    if (problems.length) setProblem(problems.join(" "));
+    const fresh = good.slice(0, room).map((file) => ({
+      key: crypto.randomUUID(),
+      file,
+      type: AUTO as typeof AUTO,
+      state: "preparing" as FileState,
+    }));
     setFiles((cur) => [...cur, ...fresh]);
     const ready: { key: string; sha: string }[] = [];
     for (const f of fresh) {
@@ -158,13 +166,25 @@ export function UploadDialog({
     setTrip(tripHint ?? "");
   };
 
-  const toUpload = files.filter((f) => f.state === "ready");
+  // Ready files, plus prepared files whose upload failed (e.g. the connection dropped) to retry.
+  const toUpload = files.filter(
+    (f) => f.state === "ready" || (f.state === "failed" && f.prepared && !f.docId),
+  );
+  const uploaded = files.filter((f) => f.docId);
+  const pending = files.filter((f) => !f.docId);
+  const showResults = uploaded.length > 0;
+  const close = () => {
+    if (busy) return;
+    reset();
+    onOpenChange(false);
+  };
   const submit = async () => {
     setBusy(true);
     let ok = 0;
     let duplicates = 0;
+    setProblem(null);
     for (const f of toUpload) {
-      patch(f.key, { state: "uploading" });
+      patch(f.key, { state: "uploading", error: undefined });
       try {
         const r = await api.documents.uploadOne({
           file: f.file,
@@ -175,7 +195,7 @@ export function UploadDialog({
         });
         ok++;
         if (r.duplicate) duplicates++;
-        patch(f.key, { state: "done" });
+        patch(f.key, { state: "done", docId: r.id });
       } catch (e) {
         patch(f.key, { state: "failed", error: e instanceof Error ? e.message : "Upload failed" });
       }
@@ -190,10 +210,8 @@ export function UploadDialog({
       toast.success(
         `${ok} document${ok > 1 ? "s" : ""} uploaded · reading started${duplicates ? ` · ${duplicates} kept as duplicate` : ""}`,
       );
-    if (ok === toUpload.length) {
-      reset();
-      onOpenChange(false);
-    }
+    if (ok < toUpload.length)
+      setProblem("Some files did not upload. Check your connection and press Retry.");
   };
 
   return (
@@ -207,13 +225,20 @@ export function UploadDialog({
     >
       <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload documents</DialogTitle>
+          <DialogTitle>{showResults ? "Uploaded" : "Upload documents"}</DialogTitle>
           <DialogDescription>
-            Weighbridge slips, loading / unloading slips, bills and delivery photos. AI reads each
-            one and records what it can match; anything unclear goes to the review queue.
+            {showResults
+              ? "AI is reading your files. Results appear here as each one finishes."
+              : "Weighbridge slips, loading / unloading slips, bills and delivery photos. AI reads each one and records what it can match; anything unclear goes to the review queue."}
           </DialogDescription>
         </DialogHeader>
+        {showResults && (
+          <UploadResults
+            items={uploaded.map((f) => ({ docId: f.docId!, fileName: f.file.name }))}
+          />
+        )}
         <div
+          hidden={showResults}
           onDragOver={(e) => {
             e.preventDefault();
             setDrag(true);
@@ -284,9 +309,9 @@ export function UploadDialog({
             {problem}
           </p>
         )}
-        {files.length > 0 && (
+        {pending.length > 0 && (
           <ul className="max-h-64 space-y-2 overflow-y-auto" aria-label="Files to upload">
-            {files.map((f) => (
+            {pending.map((f) => (
               <li key={f.key} className="rounded-lg border p-2.5">
                 <div className="flex items-center gap-3">
                   <span className="grid size-5 place-items-center">{STATE_ICON[f.state]}</span>
@@ -342,7 +367,7 @@ export function UploadDialog({
             ))}
           </ul>
         )}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2" hidden={showResults}>
           <div className="space-y-1.5">
             <Label>Related trip (optional)</Label>
             <EntityPicker
@@ -368,16 +393,35 @@ export function UploadDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => void submit()}
-            disabled={!toUpload.length || busy || files.some((f) => f.state === "preparing")}
-          >
-            {busy && <Loader2 className="size-4 animate-spin" />}Upload {toUpload.length || ""} file
-            {toUpload.length === 1 ? "" : "s"}
-          </Button>
+          {showResults ? (
+            <>
+              <Button variant="outline" onClick={reset} disabled={busy}>
+                <FileUp className="size-4" /> Upload more
+              </Button>
+              {toUpload.length > 0 && (
+                <Button variant="outline" onClick={() => void submit()} disabled={busy}>
+                  {busy && <Loader2 className="size-4 animate-spin" />}Retry {toUpload.length}
+                </Button>
+              )}
+              <Button onClick={close} disabled={busy}>
+                Done
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={close} disabled={busy}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => void submit()}
+                disabled={!toUpload.length || busy || files.some((f) => f.state === "preparing")}
+              >
+                {busy && <Loader2 className="size-4 animate-spin" />}
+                {files.some((f) => f.state === "failed" && f.prepared) ? "Retry" : "Upload"}{" "}
+                {toUpload.length || ""} file{toUpload.length === 1 ? "" : "s"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

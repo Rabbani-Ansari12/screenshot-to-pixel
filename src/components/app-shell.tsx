@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  Activity,
   AlertTriangle,
   Bell,
-  CheckCheck,
   ChevronDown,
   Command as CommandIcon,
+  FileClock,
+  FileUp,
   Inbox,
   Layers3,
   LayoutDashboard,
@@ -46,7 +48,14 @@ import {
 } from "@/hooks/queries";
 import { useAuth } from "@/lib/auth";
 import { formatRelative, initials } from "@/lib/format";
-import { NAV_GROUPS, navItemFor, usesSampleData } from "@/lib/navigation";
+import {
+  NAV_SECTIONS,
+  navItemFor,
+  sectionFor,
+  usesSampleData,
+  type NavItem,
+  type NavSection,
+} from "@/lib/navigation";
 import { applyTheme, readTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { InfoNote, NoAccess } from "./common";
@@ -76,77 +85,129 @@ function Brand() {
   );
 }
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+/** Pages of a section the current user may open, in menu order. */
+function useVisibleItems() {
+  const { can } = useAuth();
+  return (section: NavSection | undefined): NavItem[] =>
+    section?.items.filter((i) => !i.hidden && can(i.requires)) ?? [];
+}
+
+function SidebarNav({ onNavigate, onUpload }: { onNavigate?: () => void; onUpload: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { can } = useAuth();
   const reviewCount = useReviewCount();
-  const active = navItemFor(pathname);
+  const visibleItems = useVisibleItems();
+  const activeSection = sectionFor(navItemFor(pathname));
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
         <Brand />
       </div>
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4" aria-label="Main navigation">
-        {NAV_GROUPS.map((group) => {
-          const items = group.items.filter((i) => can(i.requires));
-          if (!items.length) return null;
+      {can("view_records") && (
+        <div className="px-3 pt-4">
+          <Button
+            className="h-11 w-full justify-start gap-2.5 rounded-xl text-[14px] font-semibold"
+            onClick={() => {
+              onNavigate?.();
+              onUpload();
+            }}
+          >
+            <FileUp className="size-[18px]" aria-hidden /> Upload receipt
+          </Button>
+          <p className="mt-1.5 px-1 text-[11px] leading-snug text-sidebar-foreground/55">
+            Photo or PDF of a slip or bill. AI reads it and fills in the trip.
+          </p>
+        </div>
+      )}
+      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
+        <ul className="space-y-1">
+          {NAV_SECTIONS.filter((s) => s.sidebar !== false).map((section) => {
+            const first = visibleItems(section)[0];
+            if (!first) return null;
+            const isActive = activeSection === section;
+            const Icon = section.icon;
+            return (
+              <li key={section.label}>
+                <Link
+                  to={first.path}
+                  onClick={onNavigate}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "group flex h-10 items-center gap-3 rounded-lg px-3 text-[14px] font-medium transition-colors focus-visible:outline-sidebar-ring",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      "size-[18px] shrink-0",
+                      isActive ? "text-sidebar-primary" : "text-sidebar-foreground/55",
+                    )}
+                    aria-hidden
+                  />
+                  <span className="truncate">{section.label}</span>
+                  {section.badge === "review" && can("review_documents") && reviewCount > 0 && (
+                    <span
+                      className="ml-auto rounded-full bg-amber-400 px-1.5 py-px text-[11px] font-bold text-amber-950"
+                      aria-label={`${reviewCount} items to review`}
+                    >
+                      {reviewCount}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </div>
+  );
+}
+
+/**
+ * The pages of the current section as a small tab strip, shown on a section's list pages
+ * (not on detail pages, which have breadcrumbs).
+ */
+function SectionTabs() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const reviewCount = useReviewCount();
+  const visibleItems = useVisibleItems();
+  const item = navItemFor(pathname);
+  const items = visibleItems(sectionFor(item));
+  if (!item || item.hidden || pathname !== item.path || items.length < 2) return null;
+  return (
+    <nav
+      aria-label="Section pages"
+      className="-mx-4 mb-5 overflow-x-auto px-4 sm:mx-0 sm:px-0 [scrollbar-width:none]"
+    >
+      <ul className="flex w-max gap-1 rounded-xl border bg-muted/40 p-1">
+        {items.map((i) => {
+          const isActive = i.path === item.path;
           return (
-            <div key={group.label}>
-              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
-                {group.label}
-              </p>
-              <ul className="space-y-0.5">
-                {items.map((item) => {
-                  const isActive = active?.path === item.path;
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.path}>
-                      <Link
-                        to={item.path}
-                        onClick={onNavigate}
-                        aria-current={isActive ? "page" : undefined}
-                        className={cn(
-                          "group flex h-9 items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium transition-colors focus-visible:outline-sidebar-ring",
-                          isActive
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                            : "text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-                        )}
-                      >
-                        <Icon
-                          className={cn(
-                            "size-4 shrink-0",
-                            isActive ? "text-sidebar-primary" : "text-sidebar-foreground/55",
-                          )}
-                          aria-hidden
-                        />
-                        <span className="truncate">{item.label}</span>
-                        {item.badge === "review" && reviewCount > 0 && (
-                          <span
-                            className="ml-auto rounded-full bg-amber-400 px-1.5 py-px text-[11px] font-bold text-amber-950"
-                            aria-label={`${reviewCount} items to review`}
-                          >
-                            {reviewCount}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            <li key={i.path}>
+              <Link
+                to={i.path}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-[13px] font-medium transition-colors",
+                  isActive
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {i.label}
+                {i.badge === "review" && reviewCount > 0 && (
+                  <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-amber-950">
+                    {reviewCount}
+                  </span>
+                )}
+              </Link>
+            </li>
           );
         })}
-      </nav>
-      <div className="m-3 rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold">Document intake</span>
-          <span className="size-2 rounded-full bg-emerald-400" aria-hidden />
-        </div>
-        <p className="mt-1 text-[11px] leading-relaxed text-sidebar-foreground/60">
-          Upload slips and bills from the inbox. AI reads them and records what it can match.
-        </p>
-      </div>
-    </div>
+      </ul>
+    </nav>
   );
 }
 
@@ -327,6 +388,17 @@ function UserMenu() {
             <Settings2 className="size-4" /> Settings
           </DropdownMenuItem>
         )}
+        {isOwner && (
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/audit" })}>
+            <FileClock className="size-4" /> Audit history
+          </DropdownMenuItem>
+        )}
+        {isOwner && (
+          <DropdownMenuItem onSelect={() => void navigate({ to: "/system" })}>
+            <Activity className="size-4" /> System health
+          </DropdownMenuItem>
+        )}
+        {isOwner && <DropdownMenuSeparator />}
         <DropdownMenuItem
           onSelect={() => {
             void logout().finally(() => navigate({ to: "/login" }));
@@ -339,33 +411,63 @@ function UserMenu() {
   );
 }
 
-function MobileBottomNav({ onMore }: { onMore: () => void }) {
+function MobileBottomNav({ onMore, onUpload }: { onMore: () => void; onUpload: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const active = navItemFor(pathname);
+  const activeSection = sectionFor(navItemFor(pathname))?.label;
   const reviewCount = useReviewCount();
   const { can } = useAuth();
   const items = [
-    { label: "Home", path: "/", icon: LayoutDashboard, show: true },
-    { label: "Inbox", path: "/documents", icon: Inbox, show: can("view_records") },
     {
-      label: "Review",
-      path: "/review",
-      icon: CheckCheck,
-      show: can("review_documents"),
-      badge: reviewCount,
+      label: "Home",
+      section: "Dashboard",
+      path: "/",
+      icon: LayoutDashboard,
+      show: true,
+      order: "order-1",
     },
-    { label: "Trips", path: "/trips", icon: Truck, show: can("view_records") },
+    {
+      label: "Receipts",
+      section: "Receipts & Slips",
+      path: can("review_documents") && reviewCount > 0 ? "/review" : "/documents",
+      icon: Inbox,
+      show: can("view_records"),
+      badge: can("review_documents") ? reviewCount : 0,
+      order: "order-2",
+    },
+    {
+      label: "Trucks",
+      section: "Truck Ledger",
+      path: "/trips",
+      icon: Truck,
+      show: can("view_records"),
+      order: "order-4",
+    },
   ].filter((i) => i.show);
+  const canUpload = can("view_records");
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden"
       aria-label="Mobile navigation"
     >
-      <ul className="grid grid-cols-5">
+      <ul className={cn("grid", canUpload ? "grid-cols-5" : "grid-cols-4")}>
+        {canUpload && (
+          <li className="order-3">
+            <button
+              type="button"
+              onClick={onUpload}
+              className="flex h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold text-primary"
+              aria-label="Upload receipt"
+            >
+              <span className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground shadow-md">
+                <FileUp className="size-[18px]" aria-hidden />
+              </span>
+            </button>
+          </li>
+        )}
         {items.map((i) => {
-          const isActive = active?.path === i.path;
+          const isActive = activeSection === i.section;
           return (
-            <li key={i.path}>
+            <li key={i.label} className={i.order}>
               <Link
                 to={i.path}
                 aria-current={isActive ? "page" : undefined}
@@ -385,7 +487,7 @@ function MobileBottomNav({ onMore }: { onMore: () => void }) {
             </li>
           );
         })}
-        <li>
+        <li className="order-5">
           <button
             type="button"
             onClick={onMore}
@@ -420,7 +522,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[260px] bg-sidebar text-sidebar-foreground lg:block">
-        <SidebarNav />
+        <SidebarNav onUpload={() => setUpload(true)} />
       </aside>
       <div className="lg:pl-[260px]">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur-lg sm:px-6">
@@ -446,6 +548,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             </kbd>
           </button>
           <div className="ml-auto flex items-center gap-1">
+            {can("view_records") && (
+              <Button
+                onClick={() => setUpload(true)}
+                className="hidden sm:inline-flex lg:hidden"
+                aria-label="Upload receipt"
+              >
+                <FileUp className="size-4" aria-hidden /> Upload
+              </Button>
+            )}
             <IntakeIndicator />
             <NotificationsBell />
             <ThemeToggle />
@@ -462,10 +573,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               module is connected.
             </InfoNote>
           )}
+          {allowed && <SectionTabs />}
           {allowed ? children : <NoAccess />}
         </main>
       </div>
-      <MobileBottomNav onMore={() => setDrawer(true)} />
+      <MobileBottomNav onMore={() => setDrawer(true)} onUpload={() => setUpload(true)} />
       <Sheet open={drawer} onOpenChange={setDrawer}>
         <SheetContent
           side="left"
@@ -475,7 +587,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SheetTitle>Navigation</SheetTitle>
             <SheetDescription>All pages</SheetDescription>
           </SheetHeader>
-          <SidebarNav onNavigate={() => setDrawer(false)} />
+          <SidebarNav onNavigate={() => setDrawer(false)} onUpload={() => setUpload(true)} />
         </SheetContent>
       </Sheet>
       <CommandPalette open={search} onOpenChange={setSearch} onUpload={() => setUpload(true)} />
