@@ -25,9 +25,12 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
-/** Optional shared tester login, shown as a one-click button while the app is being tested. */
-const TESTER_EMAIL = import.meta.env.VITE_TESTER_EMAIL;
-const TESTER_PASSWORD = import.meta.env.VITE_TESTER_PASSWORD;
+/**
+ * Shared tester login, shown as a one-click button while the app is being tested.
+ * TEMPORARY (development only): remove these defaults and change the admin password before real use.
+ */
+const TESTER_EMAIL = import.meta.env.VITE_TESTER_EMAIL || "rabbani.dev02@gmail.com";
+const TESTER_PASSWORD = import.meta.env.VITE_TESTER_PASSWORD || "Admin@12345";
 const hasTesterLogin = Boolean(TESTER_EMAIL && TESTER_PASSWORD);
 
 export function LoginPage() {
