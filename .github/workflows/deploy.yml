@@ -6,6 +6,7 @@
 #   SUPABASE_PROJECT_REF    project ref of that environment
 #   SUPABASE_DB_PASSWORD    database password of that project
 #   VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY   public values for the browser
+#   VITE_TESTER_EMAIL / VITE_TESTER_PASSWORD     optional; shows "Sign in as tester" (public!)
 #   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
 # Add "required reviewers" to the production environment so nothing reaches production unapproved.
 name: Deploy
@@ -61,6 +62,8 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_TESTER_EMAIL: ${{ secrets.VITE_TESTER_EMAIL }}
+          VITE_TESTER_PASSWORD: ${{ secrets.VITE_TESTER_PASSWORD }}
           NITRO_PRESET: vercel
         run: |
           npm ci

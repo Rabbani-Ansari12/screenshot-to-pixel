@@ -25,6 +25,11 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
+/** Optional shared tester login, shown as a one-click button while the app is being tested. */
+const TESTER_EMAIL = import.meta.env.VITE_TESTER_EMAIL;
+const TESTER_PASSWORD = import.meta.env.VITE_TESTER_PASSWORD;
+const hasTesterLogin = Boolean(TESTER_EMAIL && TESTER_PASSWORD);
+
 export function LoginPage() {
   const { login, user, ready, notice, clearNotice } = useAuth();
   const navigate = useNavigate();
@@ -47,6 +52,12 @@ export function LoginPage() {
       setError(e instanceof Error ? e.message : "Could not sign in. Please try again.");
       form.setValue("password", "");
     }
+  };
+  const signInAsTester = () => {
+    if (!TESTER_EMAIL || !TESTER_PASSWORD) return;
+    form.setValue("email", TESTER_EMAIL);
+    form.setValue("password", TESTER_PASSWORD);
+    void form.handleSubmit(onSubmit)();
   };
   const message = error ?? notice;
 
@@ -110,6 +121,17 @@ export function LoginPage() {
           <Button type="submit" className="w-full" disabled={form.formState.isSubmitting || !ready}>
             {form.formState.isSubmitting && <Loader2 className="size-4 animate-spin" />}Sign in
           </Button>
+          {hasTesterLogin && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={signInAsTester}
+              disabled={form.formState.isSubmitting || !ready}
+            >
+              Sign in as tester
+            </Button>
+          )}
           <p className="text-center text-xs text-muted-foreground">
             No account? Ask the owner to add you under Employees & Permissions.
           </p>
